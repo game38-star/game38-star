@@ -31,6 +31,7 @@ function GameContent() {
   const [animatedPositions, setAnimatedPositions] = useState<Record<string, number>>({});
 
   const [error, setError] = useState("");
+  const [declinedPurchaseKey, setDeclinedPurchaseKey] = useState<string | null>(null);
   const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
   const [auction, setAuction] = useState<Auction | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -416,6 +417,10 @@ function GameContent() {
   const selectedField = selectedFieldId !== null ? fields[selectedFieldId] : undefined;
   const selectedOwner = players.find((p) => p.player_id === selectedProperty?.owner_id);
   const isMySelectedProperty = !!myId && selectedProperty?.owner_id === myId;
+  const purchaseKey = `${gameState.turn_number}:${gameState.current_turn}:${activePosition}`;
+  const showPurchasePrompt = myTurn && gameState.turn_phase === "decision" && !diceRolling &&
+    !specialIds.has(activePosition) && cityPrices[activePosition] != null &&
+    !propertyOwner && declinedPurchaseKey !== purchaseKey;
   const canManageSelected = isMySelectedProperty && myTurn && gameState.turn_phase === "decision" && !busy;
   const selectedColorGroup = selectedFieldId === null
     ? undefined
@@ -544,14 +549,9 @@ function GameContent() {
           </div>
         )}
 
-        <div className="space-y-2 px-3 pt-3">
-          {gameState.last_start_bonus && <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-center"><p className="text-sm font-bold text-emerald-200">💰 Premia za START</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_start_bonus?.player_id)?.nickname ?? "Gracz"} ukończył okrążenie</p><p className="text-xl font-black text-emerald-300">+${gameState.last_start_bonus.amount}</p></div>}
-          {gameState.last_rent && <div className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-center"><p className="text-sm font-bold text-amber-200">💸 Zapłacono czynsz</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_rent?.from_player)?.nickname ?? "Gracz"} → {players.find((p) => p.player_id === gameState.last_rent?.to_player)?.nickname ?? "Gracz"} · {fields[gameState.last_rent.field_id]?.name ?? "Nieruchomość"}</p><p className="text-xl font-black text-amber-200">${gameState.last_rent.amount}</p></div>}
-        </div>
-
         <section className="mt-auto px-3 pt-3">
-          <div className="rounded-2xl border border-white/10 bg-[#172235] p-4 shadow-xl">
-            <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="rounded-xl border border-white/10 bg-[#172235] p-2.5 shadow-xl">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Aktualny ruch</p><p className="truncate text-sm font-bold text-white">{myTurn ? "✨ Twoja kolej!" : `⏳ ${currentPlayer?.nickname ?? "Oczekiwanie"}`}</p></div>
               <span className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-slate-300">{gameState.turn_phase === "roll" ? "RZUT" : "DECYZJA"}</span>
             </div>
@@ -559,12 +559,21 @@ function GameContent() {
             {gameState.turn_phase === "roll" ? (
               <button onClick={rollDice} disabled={!myTurn || busy} className="w-full rounded-xl bg-gradient-to-r from-amber-300 to-yellow-500 px-4 py-4 text-sm font-black tracking-wide text-[#172033] shadow-[0_6px_20px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "🎲 RZUCANIE / RUCH PIONKA..." : "🎲 RZUĆ KOSTKAMI"}</button>
             ) : (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-white/10 bg-[#0f1a2b] p-3 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pole {activePosition}</p>
-                  <p className="mt-1 text-lg font-black text-white">{activeField?.name ?? "Nieznane pole"}</p>
-                  {specialIds.has(activePosition) ? <p className="mt-1 text-xs text-slate-400">Pole specjalne — brak możliwości zakupu</p> : propertyOwner ? <p className="mt-1 text-xs text-slate-300">🏠 Właściciel: <span className="font-bold text-amber-200">{propertyOwnerPlayer?.nickname ?? "Gracz"}</span></p> : <><p className="mt-1 text-xl font-black text-emerald-300">${propertyPrice}</p><p className="mt-1 text-xs text-slate-400">Saldo: ${activeBalance.toLocaleString("en-US")}</p><button onClick={buyProperty} disabled={!myTurn || busy || !!auction || activeBalance < propertyPrice} className="mt-3 w-full rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 px-3 py-3 font-black text-[#08251d] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "PRZETWARZANIE..." : `🏠 KUP MIASTO ZA $${propertyPrice}`}</button></>}
-                </div>
+              <div className="space-y-2">
+                {showPurchasePrompt && (
+                  <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-2.5">
+                    <p className="mb-2 text-center text-sm font-bold">Czy chcesz kupić {activeField?.name ?? "to miasto"} za ${propertyPrice}?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => void buyProperty()}
+                        disabled={busy || !!auction || activeBalance < propertyPrice}
+                        className="rounded-lg bg-emerald-400 px-2 py-2.5 text-xs font-black text-slate-950 disabled:opacity-40">{busy ? "Kupowanie..." : "✅ Kupuję"}</button>
+                      <button type="button" onClick={() => setDeclinedPurchaseKey(purchaseKey)}
+                        disabled={busy || !!auction}
+                        className="rounded-lg border border-white/15 bg-white/10 px-2 py-2.5 text-xs font-bold text-white disabled:opacity-40">✕ Odrzuć</button>
+                    </div>
+                    {activeBalance < propertyPrice && <p className="mt-1 text-center text-[11px] text-rose-300">Nie masz wystarczająco pieniędzy.</p>}
+                  </div>
+                )}
                 <button onClick={finishTurn} disabled={!myTurn || busy || !!auction || (gameState.balances?.[myId ?? ""] ?? 0) < 0} className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "KOŃCZENIE TURY..." : "⏭️ ZAKOŃCZ TURĘ"}</button>
                 {myTurn && (gameState.balances?.[myId ?? ""] ?? 0) < 0 && (
                   <div className="space-y-2 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3">
@@ -577,7 +586,7 @@ function GameContent() {
                 )}
               </div>
             )}
-            <p className="mt-3 truncate text-center text-[10px] text-slate-500">Pokój: {roomId}</p>
+
           </div>
         </section>
       </div>

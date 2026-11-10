@@ -9,15 +9,6 @@ export function GameBoard({ players, properties, gameState, animatedPositions, c
   currentPlayer: Player | undefined; activePosition: number; diceRolling: boolean; hasDice: boolean;
   onSelectProperty?: (fieldId: number) => void;
 }) {
-  const nameOf = (id: string) => players.find(p => p.player_id === id)?.nickname ?? "Gracz";
-  const events: { text: string; amount?: string }[] = [];
-  if (gameState.last_rent) {
-    const rent = gameState.last_rent;
-    events.push({ text: `💸 ${nameOf(rent.from_player)} zapłacił(a) ${nameOf(rent.to_player)} za ${fields[rent.field_id]?.name ?? "nieruchomość"}`, amount: `−$${rent.amount}` });
-  }
-  if (gameState.last_start_bonus) {
-    events.push({ text: `💰 ${nameOf(gameState.last_start_bonus.player_id)} otrzymał(a) premię START`, amount: `+$${gameState.last_start_bonus.amount}` });
-  }
 
   return (
     <div className="px-1 sm:px-2">
@@ -47,13 +38,12 @@ export function GameBoard({ players, properties, gameState, animatedPositions, c
           );
         })}
         <div style={{ gridRow: "2 / 8", gridColumn: "2 / 8" }} className="relative flex min-h-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-sky-200/10 bg-[radial-gradient(circle_at_50%_20%,#2d4663_0%,#18263c_50%,#101b2e_100%)] p-2 text-center">
-          <h2 className="text-[clamp(10px,3.3vw,15px)] font-black tracking-wide text-amber-200">📣 WYDARZENIA</h2>
-          <div className="w-full max-w-[95%] space-y-1">
-            {events.length ? events.map((event, index) => <div key={index} className="rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-[clamp(8px,2.1vw,11px)] text-slate-100"><span>{event.text}</span> <strong className="text-amber-200">{event.amount}</strong></div>) : <p className="text-[clamp(8px,2.1vw,11px)] text-slate-400">Czekamy na wydarzenia w grze</p>}
-          </div>
-          <p className="max-w-[95%] truncate text-[clamp(8px,2.1vw,11px)] text-slate-300">{currentPlayer?.nickname ?? "Oczekiwanie"} • {gameState.turn_phase === "roll" ? "rzut kostkami" : "decyzja"}</p>
-          <div className="flex items-center gap-2">{[gameState.dice_1, gameState.dice_2].map((die, i) => <Dice3D key={i} value={die} rolling={diceRolling} />)}</div>
-          <p className="text-[clamp(9px,2.3vw,12px)] font-bold text-amber-200">{diceRolling ? "🎲 Kostki się toczą..." : hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Czekamy na pierwszy rzut"}</p>
+          <p className="max-w-full truncate text-[clamp(9px,2.5vw,13px)] font-semibold text-slate-300">{currentPlayer?.nickname ?? "Oczekiwanie"} • {gameState.turn_phase === "roll" ? "rzut kostkami" : "decyzja"}</p>
+          <div className="flex items-center justify-center gap-2">{[gameState.dice_1, gameState.dice_2].map((die, i) => <Dice3D key={i} value={die} rolling={diceRolling} />)}</div>
+          <p className="text-[clamp(12px,3.3vw,20px)] font-black text-amber-200">{diceRolling ? "🎲 Rzut..." : hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Rzuć kostkami"}</p>
+          {gameState.turn_phase === "decision" && !diceRolling && (
+            <p className="max-w-full break-words text-[clamp(10px,2.7vw,15px)] font-bold text-white">{fields[activePosition]?.name ?? "Pole"}</p>
+          )}
         </div>
       </div>
     </div>
