@@ -442,14 +442,14 @@ function GameContent() {
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e3050_0%,#0b1220_52%,#080d17_100%)] text-white">
       <style>{`@keyframes bankrollDiceSpin { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); } 100% { transform: rotateX(1080deg) rotateY(1440deg) rotateZ(360deg); } } .bankroll-dice-spin { animation: bankrollDiceSpin 850ms linear infinite; } @keyframes bankrollPawnHop { 0% { transform: translateY(3px) scale(.9) rotate(-8deg); } 45% { transform: translateY(-8px) scale(1.14) rotate(5deg); } 100% { transform: translateY(0) scale(1); } } .bankroll-pawn-hop { animation: bankrollPawnHop 290ms ease-out; }`}</style>
       <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col border-x border-white/5 bg-[#0d1626]/80 pb-4 shadow-2xl">
-        <header className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-300/80">Polska edycja</p>
-            <h1 className="text-lg font-black tracking-tight">CITY <span className="text-amber-300">ROLL</span></h1>
+        <header className="flex h-9 shrink-0 items-center justify-between border-b border-white/10 px-3">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h1 className="text-sm font-black leading-none tracking-tight">CITY <span className="text-amber-300">ROLL</span></h1>
+            <span className="text-[8px] font-semibold uppercase tracking-wider text-amber-300/65">Polska edycja</span>
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-right">
-            <p className="text-[10px] uppercase tracking-wider text-slate-400">Tura</p>
-            <p className="text-lg font-black text-amber-300">#{gameState.turn_number}</p>
+          <div className="flex shrink-0 items-baseline gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1">
+            <span className="text-[9px] uppercase text-slate-400">Tura</span>
+            <span className="text-xs font-black leading-none text-amber-300">#{gameState.turn_number}</span>
           </div>
         </header>
 
