@@ -4,8 +4,9 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/src/lib/supabase/client";
 
-type Player = { player_id: string; nickname: string; color: string; joined_at: string };
-type Property = { field_id: number; owner_id: string };
+type Player = { player_id: string; nickname: string; color: string; joined_at: string; is_bankrupt: boolean };
+type RoomStatus = { status: string; winner_id: string | null };
+type Property = { field_id: number; owner_id: string; building_level: number };
 type GameState = {
   room_id: string;
   current_turn: string | null;
@@ -37,10 +38,11 @@ const fields = cityNames.map((name, id) => ({
 }));
 
 function getPosition(index: number) {
-  if (index < 8) return { row: 8, col: 8 - index };
-  if (index < 15) return { row: 8 - (index - 7), col: 1 };
-  if (index < 22) return { row: 1, col: index - 13 };
-  return { row: index - 20, col: 8 };
+  // START w lewym dolnym rogu; ruch: w prawo, w górę, w lewo, w dół.
+  if (index < 8) return { row: 8, col: index + 1 };
+  if (index < 15) return { row: 8 - (index - 7), col: 8 };
+  if (index < 22) return { row: 1, col: 8 - (index - 14) };
+  return { row: index - 20, col: 1 };
 }
 
 function GameContent() {
@@ -50,23 +52,27 @@ function GameContent() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [roomStatus, setRoomStatus] = useState<RoomStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const loadGame = useCallback(async () => {
-    const [playersResult, stateResult, propertiesResult] = await Promise.all([
-      supabase.from("room_players").select("player_id, nickname, color, joined_at")
+    const [playersResult, stateResult, propertiesResult, roomResult] = await Promise.all([
+      supabase.from("room_players").select("player_id, nickname, color, joined_at, is_bankrupt")
         .eq("room_id", roomId).order("joined_at", { ascending: true }).order("player_id", { ascending: true }),
       supabase.from("game_states").select("*").eq("room_id", roomId).single(),
-      supabase.from("game_properties").select("field_id, owner_id").eq("room_id", roomId),
+      supabase.from("game_properties").select("field_id, owner_id, building_level").eq("room_id", roomId),
+      supabase.from("rooms").select("status, winner_id").eq("id", roomId).single(),
     ]);
     if (playersResult.error) throw playersResult.error;
     if (stateResult.error) throw stateResult.error;
     if (propertiesResult.error) throw propertiesResult.error;
+    if (roomResult.error) throw roomResult.error;
     setPlayers(playersResult.data ?? []);
     setProperties(propertiesResult.data ?? []);
     setGameState(stateResult.data as GameState);
+    setRoomStatus(roomResult.data as RoomStatus);
   }, [roomId]);
 
   useEffect(() => {
@@ -98,7 +104,7 @@ function GameContent() {
   }, [roomId, loadGame]);
 
   async function rollDice() {
-    if (!myId || !gameState || busy) return;
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
     if (gameState.current_turn !== myId || gameState.turn_phase !== "roll") {
       setError("Teraz nie możesz rzucić kostkami."); return;
     }
@@ -112,9 +118,12 @@ function GameContent() {
   }
 
   async function finishTurn() {
-    if (!myId || !gameState || busy) return;
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
     if (gameState.current_turn !== myId || gameState.turn_phase !== "decision") {
       setError("Nie możesz teraz zakończyć tury."); return;
+    }
+    if ((gameState.balances?.[myId] ?? 0) < 0) {
+      setError("Masz dług. Sprzedaj majątek albo ogłoś bankructwo."); return;
     }
     setBusy(true); setError("");
     try {
@@ -126,7 +135,7 @@ function GameContent() {
   }
 
   async function buyProperty() {
-    if (!myId || !gameState || busy) return;
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
     if (gameState.current_turn !== myId || gameState.turn_phase !== "decision") {
       setError("Teraz nie możesz kupić nieruchomości."); return;
     }
@@ -148,10 +157,116 @@ function GameContent() {
     finally { setBusy(false); }
   }
 
+  async function buildProperty(fieldId: number) {
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
+    if (gameState.current_turn !== myId || gameState.turn_phase !== "decision") {
+      setError("Możesz budować tylko podczas swojej tury w fazie decyzji.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("build_game_property", {
+        p_room_id: roomId,
+        p_field_id: fieldId,
+      });
+      if (rpcError) throw rpcError;
+      await loadGame();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nie udało się rozbudować miasta.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sellBuilding(fieldId: number) {
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
+    if (gameState.current_turn !== myId || gameState.turn_phase !== "decision") {
+      setError("Możesz sprzedawać tylko podczas swojej tury.");
+      return;
+    }
+    const property = properties.find((p) => p.field_id === fieldId);
+    if (!property || property.owner_id !== myId || property.building_level <= 0) {
+      setError("Nie masz budynku do sprzedania na tym polu.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("sell_game_building", {
+        p_room_id: roomId,
+        p_field_id: fieldId,
+      });
+      if (rpcError) throw rpcError;
+      await loadGame();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nie udało się sprzedać budynku.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sellProperty(fieldId: number) {
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
+    if (gameState.current_turn !== myId || gameState.turn_phase !== "decision") {
+      setError("Możesz sprzedawać tylko podczas swojej tury.");
+      return;
+    }
+    const property = properties.find((p) => p.field_id === fieldId);
+    if (!property || property.owner_id !== myId) {
+      setError("To nie jest Twoje miasto.");
+      return;
+    }
+    if ((property.building_level ?? 0) > 0) {
+      setError("Najpierw sprzedaj domki lub hotel.");
+      return;
+    }
+    const city = fields[fieldId];
+    if (!city || city.price === null) return;
+    if (!window.confirm(`Sprzedać ${city.name} do banku za $${Math.floor(city.price * 0.5)}?`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("sell_game_property", {
+        p_room_id: roomId,
+        p_field_id: fieldId,
+      });
+      if (rpcError) throw rpcError;
+      await loadGame();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nie udało się sprzedać miasta.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function declareBankruptcy() {
+    if (!myId || !gameState || busy || roomStatus?.status === "finished") return;
+    if (gameState.current_turn !== myId || gameState.turn_phase !== "decision" ||
+        (gameState.balances?.[myId] ?? 0) >= 0) {
+      setError("Bankructwo można ogłosić tylko przy ujemnym saldzie podczas własnej decyzji.");
+      return;
+    }
+    if (!window.confirm("Ogłosić bankructwo? Stracisz wszystkie miasta i odpadniesz z gry.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("declare_game_bankruptcy", { p_room_id: roomId });
+      if (rpcError) throw rpcError;
+      await loadGame();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nie udało się ogłosić bankructwa.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#090e1a] text-slate-200">Ładowanie BANK ROLL...</main>;
   if (!gameState) return <main className="min-h-screen bg-[#090e1a] p-8 text-center text-white">Nie udało się wczytać gry.<p className="mt-3 text-rose-400">{error}</p></main>;
 
-  const myTurn = !!myId && gameState.current_turn === myId;
+  const gameFinished = roomStatus?.status === "finished";
+  const winner = players.find((p) => p.player_id === roomStatus?.winner_id);
+  const myTurn = !gameFinished && !!myId && gameState.current_turn === myId && !players.find((p) => p.player_id === myId)?.is_bankrupt;
   const currentPlayer = players.find((p) => p.player_id === gameState.current_turn);
   const activePosition = gameState.current_turn ? gameState.positions?.[gameState.current_turn] ?? 0 : 0;
   const activeField = fields[activePosition];
@@ -166,7 +281,7 @@ function GameContent() {
     const isMe = player.player_id === myId;
     const owned = properties.filter((p) => p.owner_id === player.player_id).length;
     return (
-      <div key={player.player_id} className={`relative min-w-0 rounded-2xl border p-3 transition-colors ${isCurrent ? "border-amber-300/70 bg-[#293348] shadow-[0_0_22px_rgba(251,191,36,0.12)]" : "border-white/10 bg-[#172235]"}`}>
+      <div key={player.player_id} className={`relative min-w-0 rounded-2xl border p-3 transition-colors ${player.is_bankrupt ? "opacity-50 " : ""}${isCurrent ? "border-amber-300/70 bg-[#293348] shadow-[0_0_22px_rgba(251,191,36,0.12)]" : "border-white/10 bg-[#172235]"}`}>
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg">{pawnColors[index] ?? "⚪"}</span>
           <div className="min-w-0 flex-1">
@@ -176,6 +291,7 @@ function GameContent() {
         </div>
         <div className="mt-2 flex items-end justify-between gap-1">
           <span className="text-lg font-black tracking-tight" style={{ color: playerAccents[index] ?? "#fff" }}>${(gameState!.balances?.[player.player_id] ?? 1500).toLocaleString("en-US")}</span>
+          {player.is_bankrupt && <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[9px] font-black text-rose-300">BANKRUT</span>}
           {isCurrent && <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[9px] font-black text-[#151b2b]">TURA</span>}
         </div>
       </div>
@@ -196,6 +312,23 @@ function GameContent() {
           </div>
         </header>
 
+        {gameFinished && (
+          <section className="mx-3 mt-3 rounded-2xl border border-amber-300/40 bg-gradient-to-br from-amber-300/20 to-[#172235] p-5 text-center shadow-xl">
+            <div className="text-5xl">🏆</div>
+            <h2 className="mt-2 text-xl font-black text-amber-200">KONIEC GRY!</h2>
+            <p className="mt-1 text-sm text-white">Zwycięzca: <strong>{winner?.nickname ?? "Nieznany gracz"}</strong></p>
+            {roomStatus?.winner_id === myId && <p className="mt-2 text-sm font-bold text-emerald-300">🎉 Wygrałeś BANK ROLL!</p>}
+            <div className="mt-3 space-y-1 text-left">
+              {players.map((player) => (
+                <div key={player.player_id} className="flex justify-between rounded-lg bg-black/20 px-3 py-2 text-xs">
+                  <span>{player.player_id === roomStatus?.winner_id ? "👑 " : player.is_bankrupt ? "💀 " : "• "}{player.nickname}</span>
+                  <span className="font-bold">${(gameState.balances?.[player.player_id] ?? 0).toLocaleString("en-US")}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">{players.slice(0, 2).map((p, i) => renderPlayer(p, i))}</div>
 
         {/* Układ 8 × 8: dokładnie 28 pól na obwodzie, bank w środku. */}
@@ -205,7 +338,7 @@ function GameContent() {
               const pos = getPosition(field.id);
               const owner = properties.find((p) => p.field_id === field.id);
               const ownerIndex = players.findIndex((p) => p.player_id === owner?.owner_id);
-              const pawns = players.map((p, i) => ({ player: p, index: i })).filter(({ player }) => (gameState.positions?.[player.player_id] ?? 0) === field.id);
+              const pawns = players.map((p, i) => ({ player: p, index: i })).filter(({ player }) => !player.is_bankrupt && (gameState.positions?.[player.player_id] ?? 0) === field.id);
               const isActive = activePosition === field.id;
               const isSpecial = field.price === null;
               return (
@@ -215,7 +348,18 @@ function GameContent() {
                   <span className="w-full break-words text-center text-[clamp(5px,1.55vw,8px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-slate-100">{field.name}</span>
                   <div className="flex min-h-0 flex-col items-center justify-end gap-0">
                     {field.price !== null ? <span className="text-[clamp(6px,1.65vw,9px)] font-black leading-none text-amber-200">${field.price}</span> : <span className="text-[clamp(9px,2.6vw,15px)] leading-none">{field.id === 0 ? "🚩" : field.id === 7 ? "🔒" : field.id === 14 ? "🅿️" : "🚓"}</span>}
-                    {owner && <span className="text-[clamp(8px,2vw,12px)] leading-none" title={ownerIndex >= 0 ? players[ownerIndex].nickname : "Właściciel"}>{pawnColors[ownerIndex] ?? "⚪"}⌂</span>}
+                    {owner && (
+                      <span
+                        className="flex items-center justify-center gap-[1px] rounded-[3px] bg-black/25 px-[1px] leading-none"
+                        title={`Zabudowa: ${owner.building_level === 5 ? "hotel" : `${owner.building_level} domków`} • ${field.name} • właściciel: ${ownerIndex >= 0 ? players[ownerIndex].nickname : "nieznany"}`}
+                      >
+                         <span className="text-[clamp(8px,2vw,12px)]">{owner.building_level === 5 ? "🏨" : "🏠"}</span>
+                         {owner.building_level > 0 && owner.building_level < 5 && (
+                           <span className="text-[7px] font-black text-white">{owner.building_level}</span>
+                         )}
+                        <span className="h-[6px] w-[6px] rounded-full border border-white/50" style={{ backgroundColor: playerAccents[ownerIndex] ?? "#fff" }} />
+                      </span>
+                    )}
                     {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map(({ player, index }) => <span key={player.player_id} title={player.nickname} className="text-[clamp(8px,2vw,12px)] leading-none">{pawnColors[index] ?? "⚪"}</span>)}</div>}
                   </div>
                 </div>
@@ -233,6 +377,9 @@ function GameContent() {
               </div>
               <p className="relative text-xs font-bold text-amber-200">{hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Czekamy na pierwszy rzut"}</p>
               <div className="relative rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] text-slate-300">Cel: $5 000</div>
+              <div className="relative flex items-center justify-center gap-3 rounded-lg border border-white/10 bg-black/15 px-2 py-1 text-[9px] text-slate-300">
+                <span>🏠 Domki 1–4</span><span>🏨 Hotel 5</span>
+              </div>
             </div>
           </div>
         </div>
@@ -243,6 +390,67 @@ function GameContent() {
           {gameState.last_start_bonus && <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-center"><p className="text-sm font-bold text-emerald-200">💰 Premia za START</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_start_bonus?.player_id)?.nickname ?? "Gracz"} ukończył okrążenie</p><p className="text-xl font-black text-emerald-300">+${gameState.last_start_bonus.amount}</p></div>}
           {gameState.last_rent && <div className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-center"><p className="text-sm font-bold text-amber-200">💸 Zapłacono czynsz</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_rent?.from_player)?.nickname ?? "Gracz"} → {players.find((p) => p.player_id === gameState.last_rent?.to_player)?.nickname ?? "Gracz"} · {fields[gameState.last_rent.field_id]?.name ?? "Nieruchomość"}</p><p className="text-xl font-black text-amber-200">${gameState.last_rent.amount}</p></div>}
         </div>
+
+        {myTurn && gameState.turn_phase === "decision" && (
+          <section className="px-3 pt-3">
+            <div className="rounded-2xl border border-white/10 bg-[#172235] p-4">
+              <h3 className="mb-1 text-sm font-bold text-white">🏗️ Zarządzanie miastami</h3>
+              <p className="mb-3 text-[11px] text-slate-400">
+                Buduj domki i hotele, sprzedawaj budynki albo oddaj miasto do banku.
+              </p>
+              {properties.filter((p) => p.owner_id === myId).length === 0 ? (
+                <p className="text-xs text-slate-400">Najpierw kup swoje pierwsze miasto.</p>
+              ) : (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {properties.filter((p) => p.owner_id === myId).map((property) => {
+                    const level = property.building_level ?? 0;
+                    const price = fields[property.field_id]?.price ?? 0;
+                    const cost = Math.ceil(price * 0.5);
+                    const buildingRefund = Math.floor(cost * 0.5);
+                    const cityRefund = Math.floor(price * 0.5);
+                    const canAfford = (gameState.balances?.[myId!] ?? 0) >= cost;
+                    return (
+                      <div key={property.field_id} className="rounded-xl border border-white/5 bg-white/5 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-white">
+                              {fields[property.field_id]?.name ?? `Pole ${property.field_id}`}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {level === 5 ? "🏨 Hotel" : level === 0 ? "Bez budynków" : `🏠 ${level}/4 domków`}
+                            </p>
+                          </div>
+                          <span className="text-xs font-bold text-amber-200">${price}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {level < 5 && (
+                            <button type="button" onClick={() => buildProperty(property.field_id)}
+                              disabled={busy || !canAfford}
+                              className="rounded-lg bg-emerald-400 px-3 py-2 text-[11px] font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">
+                              {level === 4 ? `🏨 HOTEL −$${cost}` : `🏠 BUDUJ −$${cost}`}
+                            </button>
+                          )}
+                          {level > 0 && (
+                            <button type="button" onClick={() => sellBuilding(property.field_id)} disabled={busy}
+                              className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-[11px] font-black text-rose-200 disabled:opacity-40">
+                              💰 SPRZEDAJ BUDYNEK +${buildingRefund}
+                            </button>
+                          )}
+                          {level === 0 && (
+                            <button type="button" onClick={() => sellProperty(property.field_id)} disabled={busy}
+                              className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] font-black text-amber-200 disabled:opacity-40">
+                              🏙️ SPRZEDAJ MIASTO +${cityRefund}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="mt-auto px-3 pt-3">
           <div className="rounded-2xl border border-white/10 bg-[#172235] p-4 shadow-xl">
@@ -260,7 +468,16 @@ function GameContent() {
                   <p className="mt-1 text-lg font-black text-white">{activeField?.name ?? "Nieznane pole"}</p>
                   {specialIds.has(activePosition) ? <p className="mt-1 text-xs text-slate-400">Pole specjalne — brak możliwości zakupu</p> : propertyOwner ? <p className="mt-1 text-xs text-slate-300">🏠 Właściciel: <span className="font-bold text-amber-200">{propertyOwnerPlayer?.nickname ?? "Gracz"}</span></p> : <><p className="mt-1 text-xl font-black text-emerald-300">${propertyPrice}</p><p className="mt-1 text-xs text-slate-400">Saldo: ${activeBalance.toLocaleString("en-US")}</p><button onClick={buyProperty} disabled={!myTurn || busy || activeBalance < propertyPrice} className="mt-3 w-full rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 px-3 py-3 font-black text-[#08251d] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "PRZETWARZANIE..." : `🏠 KUP MIASTO ZA $${propertyPrice}`}</button></>}
                 </div>
-                <button onClick={finishTurn} disabled={!myTurn || busy} className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "KOŃCZENIE TURY..." : "⏭️ ZAKOŃCZ TURĘ"}</button>
+                <button onClick={finishTurn} disabled={!myTurn || busy || (gameState.balances?.[myId ?? ""] ?? 0) < 0} className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "KOŃCZENIE TURY..." : "⏭️ ZAKOŃCZ TURĘ"}</button>
+                {myTurn && (gameState.balances?.[myId ?? ""] ?? 0) < 0 && (
+                  <div className="space-y-2 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3">
+                    <p className="text-xs text-rose-200">Masz ujemne saldo. Sprzedaj budynki lub miasta, aby spłacić dług. Możesz też ogłosić bankructwo.</p>
+                    <button type="button" onClick={declareBankruptcy} disabled={busy}
+                      className="w-full rounded-xl border border-rose-400/40 bg-rose-500/20 px-4 py-3 text-sm font-black text-rose-200 disabled:opacity-40">
+                      💀 OGŁOŚ BANKRUCTWO
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             <p className="mt-3 truncate text-center text-[10px] text-slate-500">Pokój: {roomId}</p>
