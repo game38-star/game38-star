@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/src/lib/supabase/client";
 
-type Player = { player_id: string; nickname: string; color: string; joined_at: string; is_bankrupt: boolean };
+type Player = { player_id: string; nickname: string; color: string; joined_at: string; is_bankrupt: boolean; pawn_id: number | null };
 type RoomStatus = { status: string; winner_id: string | null };
 type Property = { field_id: number; owner_id: string; building_level: number };
 type GameState = {
@@ -20,7 +20,19 @@ type GameState = {
   last_start_bonus?: { player_id: string; amount: number } | null;
 };
 
-const pawnColors = ["🔴", "🔵", "🟢", "🟡"];
+const pawnOptions = [
+  { id: 0, icon: "🐶", name: "Pies" },
+  { id: 1, icon: "🐱", name: "Kot" },
+  { id: 2, icon: "⚡", name: "Pikachu" },
+  { id: 3, icon: "🦊", name: "Lis" },
+  { id: 4, icon: "🐼", name: "Panda" },
+  { id: 5, icon: "🐸", name: "Żaba" },
+  { id: 6, icon: "🤖", name: "Robot" },
+  { id: 7, icon: "👻", name: "Duszek" },
+];
+function pawnIcon(pawn: number | null | undefined) {
+  return pawnOptions.find((option) => option.id === pawn)?.icon ?? "🎩";
+}
 const playerAccents = ["#fb7185", "#60a5fa", "#4ade80", "#facc15"];
 const cityNames = [
   "START", "GDAŃSK", "GDYNIA", "SOPOT", "OLSZTYN", "TORUŃ", "BYDGOSZCZ",
@@ -30,19 +42,62 @@ const cityNames = [
 ];
 const groupColors = ["#fb7185", "#60a5fa", "#fbbf24", "#34d399", "#a78bfa", "#fb923c"];
 const specialIds = new Set([0, 7, 14, 21]);
+// Ceny według układu widocznego na zrzucie Plato, dostosowane do 28 pól.
+// START -> lewa krawędź -> góra -> prawa krawędź -> dół.
+const cityPrices: Array<number | null> = [
+  null, 180, 180, 345, 70, 395, 395,
+  null, 20, 20, 60, 70, 70, 60,
+  null, 590, 590, 80, 80, 80, 40,
+  null, 45, 50, 150, 35, 70, 150,
+];
 const fields = cityNames.map((name, id) => ({
   id,
   name,
-  price: specialIds.has(id) ? null : 100 + id * 15,
+  price: cityPrices[id],
   color: groupColors[Math.floor(id / 4) % groupColors.length],
 }));
 
 function getPosition(index: number) {
-  // START w lewym dolnym rogu; ruch: w prawo, w górę, w lewo, w dół.
-  if (index < 8) return { row: 8, col: index + 1 };
-  if (index < 15) return { row: 8 - (index - 7), col: 8 };
-  if (index < 22) return { row: 1, col: 8 - (index - 14) };
-  return { row: index - 20, col: 1 };
+  // START: lewy dolny róg. Ruch przeciwnie do poprzedniej wersji.
+  if (index < 8) return { row: 8 - index, col: 1 };
+  if (index < 15) return { row: 1, col: index - 6 };
+  if (index < 22) return { row: index - 13, col: 8 };
+  return { row: 8, col: 29 - index };
+}
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function Dice3D({ value, rolling }: { value: number | null; rolling: boolean }) {
+  const faceRotations: Record<number, string> = {
+    1: "rotateX(0deg) rotateY(0deg)",
+    2: "rotateY(-90deg)",
+    3: "rotateX(-90deg)",
+    4: "rotateX(90deg)",
+    5: "rotateY(90deg)",
+    6: "rotateY(180deg)",
+  };
+  const faces = [
+    { n: 1, transform: "translateZ(20px)" },
+    { n: 2, transform: "rotateY(90deg) translateZ(20px)" },
+    { n: 3, transform: "rotateX(90deg) translateZ(20px)" },
+    { n: 4, transform: "rotateX(-90deg) translateZ(20px)" },
+    { n: 5, transform: "rotateY(-90deg) translateZ(20px)" },
+    { n: 6, transform: "rotateY(180deg) translateZ(20px)" },
+  ];
+  return (
+    <div className="relative h-12 w-12" style={{ perspective: "250px" }} aria-label={rolling ? "Kostka się obraca" : `Kostka: ${value ?? "?"}`}>
+      <div className={`absolute left-1 top-1 h-10 w-10 ${rolling ? "bankroll-dice-spin" : ""}`}
+        style={{ transformStyle: "preserve-3d", transform: rolling ? undefined : faceRotations[value ?? 1], transition: rolling ? "none" : "transform 450ms ease-out" }}>
+        {faces.map((face) => (
+          <div key={face.n} className="absolute inset-0 flex items-center justify-center rounded-lg border border-slate-300 bg-white text-xl font-black text-slate-900 shadow-inner"
+            style={{ transform: face.transform, backfaceVisibility: "hidden" }}>
+            {face.n}
+          </div>
+        ))}
+      </div>
+      {!rolling && value === null && <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-amber-300">?</span>}
+    </div>
+  );
 }
 
 function GameContent() {
@@ -55,20 +110,23 @@ function GameContent() {
   const [roomStatus, setRoomStatus] = useState<RoomStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [diceRolling, setDiceRolling] = useState(false);
+  const [animatedPositions, setAnimatedPositions] = useState<Record<string, number>>({});
+
   const [error, setError] = useState("");
 
   const loadGame = useCallback(async () => {
     const [playersResult, stateResult, propertiesResult, roomResult] = await Promise.all([
-      supabase.from("room_players").select("player_id, nickname, color, joined_at, is_bankrupt")
+      supabase.from("room_players").select("player_id, nickname, color, joined_at, is_bankrupt, pawn_id")
         .eq("room_id", roomId).order("joined_at", { ascending: true }).order("player_id", { ascending: true }),
       supabase.from("game_states").select("*").eq("room_id", roomId).single(),
       supabase.from("game_properties").select("field_id, owner_id, building_level").eq("room_id", roomId),
       supabase.from("rooms").select("status, winner_id").eq("id", roomId).single(),
     ]);
-    if (playersResult.error) throw playersResult.error;
-    if (stateResult.error) throw stateResult.error;
-    if (propertiesResult.error) throw propertiesResult.error;
-    if (roomResult.error) throw roomResult.error;
+    if (playersResult.error) throw new Error("Błąd graczy: " + playersResult.error.message);
+    if (stateResult.error) throw new Error("Błąd stanu gry: " + stateResult.error.message);
+    if (propertiesResult.error) throw new Error("Błąd nieruchomości: " + propertiesResult.error.message);
+    if (roomResult.error) throw new Error("Błąd pokoju: " + roomResult.error.message);
     setPlayers(playersResult.data ?? []);
     setProperties(propertiesResult.data ?? []);
     setGameState(stateResult.data as GameState);
@@ -108,13 +166,63 @@ function GameContent() {
     if (gameState.current_turn !== myId || gameState.turn_phase !== "roll") {
       setError("Teraz nie możesz rzucić kostkami."); return;
     }
-    setBusy(true); setError("");
+
+    const playerId = myId;
+    const startPosition = gameState.positions?.[playerId] ?? 0;
+    const startedAt = Date.now();
+    const diceSound = new Audio("/sounds/dice-roll.wav");
+    diceSound.volume = 0.7;
+    void diceSound.play().catch(() => {});
+
+    setBusy(true);
+    setDiceRolling(true);
+    setAnimatedPositions((previous) => ({ ...previous, [playerId]: startPosition }));
+    setError("");
     try {
       const { error: rpcError } = await supabase.rpc("roll_game_dice", { p_room_id: roomId });
       if (rpcError) throw rpcError;
+
+      // Odczytujemy autentyczny wynik z serwera, bez ponownego losowania.
+      const { data: rolledState, error: stateError } = await supabase
+        .from("game_states")
+        .select("dice_1, dice_2, positions")
+        .eq("room_id", roomId)
+        .single();
+      if (stateError) throw stateError;
+
+      const first = Number(rolledState.dice_1);
+      const second = Number(rolledState.dice_2);
+      if (!Number.isInteger(first) || !Number.isInteger(second) || first < 1 || first > 6 || second < 1 || second > 6) {
+        throw new Error("Nie udało się odczytać wyniku kostek.");
+      }
+      const steps = first + second;
+      // Co najmniej 900 ms animacji rzutu, nawet jeśli baza odpowie błyskawicznie.
+      await wait(Math.max(0, 900 - (Date.now() - startedAt)));
       await loadGame();
-    } catch (err) { setError(err instanceof Error ? err.message : "Nie udało się rzucić kostkami."); }
-    finally { setBusy(false); }
+      setDiceRolling(false);
+      await wait(350);
+
+      for (let step = 1; step <= steps; step++) {
+        setAnimatedPositions((previous) => ({ ...previous, [playerId]: (startPosition + step) % 28 }));
+        await wait(290);
+      }
+      // Na koniec oddajemy pozycję serwerowi, który pozostaje źródłem prawdy.
+      setAnimatedPositions((previous) => {
+        const next = { ...previous };
+        delete next[playerId];
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nie udało się rzucić kostkami.");
+      setAnimatedPositions((previous) => {
+        const next = { ...previous };
+        delete next[playerId];
+        return next;
+      });
+    } finally {
+      setDiceRolling(false);
+      setBusy(false);
+    }
   }
 
   async function finishTurn() {
@@ -144,7 +252,8 @@ function GameContent() {
     if (properties.some((property) => property.field_id === position)) {
       setError("Ta nieruchomość ma już właściciela."); return;
     }
-    const price = 100 + position * 15;
+    const price = cityPrices[position];
+    if (price == null) { setError("Tego pola nie można kupić."); return; }
     if ((gameState.balances?.[myId] ?? 0) < price) {
       setError("Nie masz wystarczająco pieniędzy."); return;
     }
@@ -272,7 +381,7 @@ function GameContent() {
   const activeField = fields[activePosition];
   const propertyOwner = properties.find((p) => p.field_id === activePosition);
   const propertyOwnerPlayer = players.find((p) => p.player_id === propertyOwner?.owner_id);
-  const propertyPrice = 100 + activePosition * 15;
+  const propertyPrice = cityPrices[activePosition] ?? 0;
   const activeBalance = gameState.current_turn ? gameState.balances?.[gameState.current_turn] ?? 0 : 0;
   const hasDice = gameState.dice_1 !== null && gameState.dice_2 !== null;
 
@@ -283,7 +392,7 @@ function GameContent() {
     return (
       <div key={player.player_id} className={`relative min-w-0 rounded-2xl border p-3 transition-colors ${player.is_bankrupt ? "opacity-50 " : ""}${isCurrent ? "border-amber-300/70 bg-[#293348] shadow-[0_0_22px_rgba(251,191,36,0.12)]" : "border-white/10 bg-[#172235]"}`}>
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg">{pawnColors[index] ?? "⚪"}</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg">{pawnIcon(player.pawn_id)}</span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-semibold text-white">{player.nickname}{isMe ? " (Ty)" : ""}</p>
             <p className="text-[10px] text-slate-400">🏠 {owned} miast{owned === 1 ? "o" : ""}</p>
@@ -300,6 +409,7 @@ function GameContent() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e3050_0%,#0b1220_52%,#080d17_100%)] text-white">
+      <style>{`@keyframes bankrollDiceSpin { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); } 100% { transform: rotateX(1080deg) rotateY(1440deg) rotateZ(360deg); } } .bankroll-dice-spin { animation: bankrollDiceSpin 850ms linear infinite; } @keyframes bankrollPawnHop { 0% { transform: translateY(3px) scale(.9) rotate(-8deg); } 45% { transform: translateY(-8px) scale(1.14) rotate(5deg); } 100% { transform: translateY(0) scale(1); } } .bankroll-pawn-hop { animation: bankrollPawnHop 290ms ease-out; }`}</style>
       <div className="mx-auto flex min-h-screen w-full max-w-[480px] flex-col border-x border-white/5 bg-[#0d1626]/80 pb-4 shadow-2xl">
         <header className="flex items-center justify-between border-b border-white/10 px-4 py-4">
           <div>
@@ -338,7 +448,7 @@ function GameContent() {
               const pos = getPosition(field.id);
               const owner = properties.find((p) => p.field_id === field.id);
               const ownerIndex = players.findIndex((p) => p.player_id === owner?.owner_id);
-              const pawns = players.map((p, i) => ({ player: p, index: i })).filter(({ player }) => !player.is_bankrupt && (gameState.positions?.[player.player_id] ?? 0) === field.id);
+              const pawns = players.map((p, i) => ({ player: p, index: i })).filter(({ player }) => !player.is_bankrupt && (animatedPositions[player.player_id] ?? gameState.positions?.[player.player_id] ?? 0) === field.id);
               const isActive = activePosition === field.id;
               const isSpecial = field.price === null;
               return (
@@ -360,7 +470,7 @@ function GameContent() {
                         <span className="h-[6px] w-[6px] rounded-full border border-white/50" style={{ backgroundColor: playerAccents[ownerIndex] ?? "#fff" }} />
                       </span>
                     )}
-                    {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map(({ player, index }) => <span key={player.player_id} title={player.nickname} className="text-[clamp(8px,2vw,12px)] leading-none">{pawnColors[index] ?? "⚪"}</span>)}</div>}
+                    {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map(({ player, index }) => <span key={`${player.player_id}-${animatedPositions[player.player_id] ?? "idle"}`} title={player.nickname} className={`inline-block origin-bottom text-[clamp(12px,3vw,19px)] leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)] ${animatedPositions[player.player_id] !== undefined ? "bankroll-pawn-hop" : ""}`}>{pawnIcon(player.pawn_id)}</span>)}</div>}
                   </div>
                 </div>
               );
@@ -373,9 +483,9 @@ function GameContent() {
               <h2 className="relative text-[clamp(18px,6vw,28px)] font-black tracking-tight">BANK <span className="text-amber-300">ROLL</span></h2>
               <p className="relative max-w-[95%] truncate text-[11px] font-medium text-slate-300">{currentPlayer?.nickname ?? "Oczekiwanie"} • {gameState.turn_phase === "roll" ? "rzut kostkami" : "decyzja"}</p>
               <div className="relative flex items-center gap-2">
-                {[gameState.dice_1, gameState.dice_2].map((die, i) => <div key={i} className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white text-2xl font-black text-[#18263c] shadow-md">{die ?? "?"}</div>)}
+                {[gameState.dice_1, gameState.dice_2].map((die, i) => <Dice3D key={i} value={die} rolling={diceRolling} />)}
               </div>
-              <p className="relative text-xs font-bold text-amber-200">{hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Czekamy na pierwszy rzut"}</p>
+              <p className="relative text-xs font-bold text-amber-200">{diceRolling ? "🎲 Kostki się toczą..." : hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Czekamy na pierwszy rzut"}</p>
               <div className="relative rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] text-slate-300">Cel: $5 000</div>
               <div className="relative flex items-center justify-center gap-3 rounded-lg border border-white/10 bg-black/15 px-2 py-1 text-[9px] text-slate-300">
                 <span>🏠 Domki 1–4</span><span>🏨 Hotel 5</span>
@@ -460,7 +570,7 @@ function GameContent() {
             </div>
             {error && <p role="alert" className="mb-3 rounded-lg border border-rose-400/30 bg-rose-400/10 p-2 text-center text-xs text-rose-300">{error}</p>}
             {gameState.turn_phase === "roll" ? (
-              <button onClick={rollDice} disabled={!myTurn || busy} className="w-full rounded-xl bg-gradient-to-r from-amber-300 to-yellow-500 px-4 py-4 text-sm font-black tracking-wide text-[#172033] shadow-[0_6px_20px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "RZUCANIE..." : "🎲 RZUĆ KOSTKAMI"}</button>
+              <button onClick={rollDice} disabled={!myTurn || busy} className="w-full rounded-xl bg-gradient-to-r from-amber-300 to-yellow-500 px-4 py-4 text-sm font-black tracking-wide text-[#172033] shadow-[0_6px_20px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "🎲 RZUCANIE / RUCH PIONKA..." : "🎲 RZUĆ KOSTKAMI"}</button>
             ) : (
               <div className="space-y-3">
                 <div className="rounded-xl border border-white/10 bg-[#0f1a2b] p-3 text-center">
