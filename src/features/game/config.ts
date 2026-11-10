@@ -12,27 +12,47 @@ export function pawnIcon(pawn: number | null | undefined) {
   return pawnOptions.find((option) => option.id === pawn)?.icon ?? "🎩";
 }
 export const playerAccents = ["#fb7185", "#60a5fa", "#4ade80", "#facc15"];
+// Pola są indeksowane od 0 w kodzie (pole 1 = indeks 0).
 export const cityNames = [
-  "START", "GDAŃSK", "GDYNIA", "SOPOT", "OLSZTYN", "TORUŃ", "BYDGOSZCZ",
-  "WIĘZIENIE", "SZCZECIN", "GORZÓW", "POZNAŃ", "ZIELONA GÓRA", "WROCŁAW", "OPOLE",
-  "PARKING", "KATOWICE", "KRAKÓW", "RZESZÓW", "LUBLIN", "KIELCE", "ŁÓDŹ",
-  "IDŹ DO WIĘZ.", "BIAŁYSTOK", "RADOM", "PŁOCK", "SIEDLCE", "WARSZAWA", "ZAKOPANE",
+  "START", "GDAŃSK", "GDYNIA", "BOBROWNIKI", "KOPALNIA WĘGLA", "TORUŃ", "BYDGOSZCZ",
+  "KARTA LOSOWA", "SZCZECIN", "KOSZALIN", "POZNAŃ", "STACJA KOLEJOWA", "KALISZ", "GNIEZNO",
+  "WIĘZIENIE", "WIELICZKA", "KRAKÓW", "KATOWICE", "STACJA PALIW", "SOSNOWIEC", "ZABRZE",
+  "PARKING / LOS", "BIAŁYSTOK", "SUWAŁKI", "RZESZÓW", "LOTNISKO", "NISKO", "STALOWA WOLA",
 ];
-export const groupColors = ["#fb7185", "#60a5fa", "#fbbf24", "#34d399", "#a78bfa", "#fb923c"];
-export const specialIds = new Set([0, 7, 14, 21]);
-// Ceny według układu widocznego na zrzucie Plato, dostosowane do 28 pól.
-// START -> lewa krawędź -> góra -> prawa krawędź -> dół.
+export const specialIds = new Set([0, 7, 14, 18, 21]);
+// Obiekty z ceną są pokazane na planszy, lecz pełne zasady ich zakupu
+// muszą być zgodne z funkcjami SQL w Supabase.
 export const cityPrices: Array<number | null> = [
-  null, 180, 180, 345, 70, 395, 395,
-  null, 20, 20, 60, 70, 70, 60,
-  null, 590, 590, 80, 80, 80, 40,
-  null, 45, 50, 150, 35, 70, 150,
+  null, 100, 100, 130, 140, 150, 150,
+  null, 170, 180, 200, 180, 200, 200,
+  null, 250, 250, 300, null, 300, 300,
+  null, 350, 350, 420, 200, 420, 450,
 ];
+const YELLOW = "#facc15";
+const GREEN = "#4ade80";
+const BLUE = "#60a5fa";
+const ORANGE = "#fb923c";
+const PURPLE = "#c084fc";
+const BROWN = "#a16207";
+const TURQUOISE = "#2dd4bf";
+const RED = "#fb7185";
+const SPECIAL = "#fbbf24";
+export const fieldColors = [
+  SPECIAL, YELLOW, YELLOW, GREEN, SPECIAL, GREEN, GREEN,
+  SPECIAL, BLUE, BLUE, ORANGE, SPECIAL, ORANGE, ORANGE,
+  SPECIAL, PURPLE, PURPLE, BROWN, SPECIAL, BROWN, BROWN,
+  SPECIAL, TURQUOISE, TURQUOISE, RED, SPECIAL, RED, RED,
+];
+export const fieldIcons: Record<number, string> = {
+  0: "🚩", 4: "⛏️", 7: "❓", 11: "🚆", 14: "🔒",
+  18: "⛽", 21: "🅿️", 25: "✈️",
+};
 export const fields = cityNames.map((name, id) => ({
   id,
   name,
   price: cityPrices[id],
-  color: groupColors[Math.floor(id / 4) % groupColors.length],
+  color: fieldColors[id],
+  icon: fieldIcons[id] ?? null,
 }));
 
 export function getPosition(index: number) {

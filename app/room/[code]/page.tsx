@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -253,29 +253,9 @@ function RoomContent() {
         </section>
 
         <section className="space-y-2 rounded-2xl sm:space-y-3 border border-white/10 bg-[#172235] p-3 shadow-xl sm:p-4">
-        {!isHost && me?.is_ready && (
-  <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-center">
-    <p className="text-sm font-bold text-emerald-300">
-      ✓ Jesteś gotowy!
-    </p>
-    <p className="mt-1 text-xs text-slate-300">
-      Oczekiwanie na rozpoczęcie gry przez gospodarza...
-    </p>
-  </div>
-)}
-      <button
-  onClick={handleReady}
-  disabled={busy || !me}
-  className={`w-full rounded-xl p-4 font-black text-white shadow-lg transition-all disabled:opacity-40 ${
-    me?.is_ready
-      ? "bg-red-500 hover:bg-red-400 shadow-red-500/20"
-      : "bg-green-500 hover:bg-green-400 shadow-green-500/20"
-  }`}
->
-  {me?.is_ready
-    ? "✕ NIE JESTEM GOTOWY"
-    : "✓ JESTEM GOTOWY"}
-</button>
+          <button onClick={handleReady} disabled={busy || !me} className={`min-h-12 w-full rounded-xl px-4 py-3 text-sm font-black sm:py-4 transition disabled:cursor-not-allowed disabled:opacity-40 ${me?.is_ready ? "border border-emerald-300/30 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20" : "bg-gradient-to-r from-emerald-400 to-teal-400 text-[#08251d] hover:brightness-110"}`}>
+            {me?.is_ready ? "✓ JESTEM GOTOWY — ZMIEŃ STATUS" : "✓ JESTEM GOTOWY"}
+          </button>
 
           {isHost && (
             <>
