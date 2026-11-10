@@ -9,6 +9,12 @@ import { GameBoard } from "@/src/features/game/components/GameBoard";
 
 type Auction = { id: string; room_id: string; field_id: number; seller_id: string; starting_price: number; highest_bid: number | null; highest_bidder: string | null; ends_at: string; status: string };
 
+// Grupy kolorystyczne zgodne z regułami build_game_property w Supabase.
+const buildColorGroups: number[][] = [
+  [1, 2], [3, 5, 6], [8, 9], [10, 12, 13],
+  [15, 16], [17, 19, 20], [22, 23], [24, 26, 27],
+];
+
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function GameContent() {
@@ -411,6 +417,19 @@ function GameContent() {
   const selectedOwner = players.find((p) => p.player_id === selectedProperty?.owner_id);
   const isMySelectedProperty = !!myId && selectedProperty?.owner_id === myId;
   const canManageSelected = isMySelectedProperty && myTurn && gameState.turn_phase === "decision" && !busy;
+  const selectedColorGroup = selectedFieldId === null
+    ? undefined
+    : buildColorGroups.find((group) => group.includes(selectedFieldId));
+  const missingColorFields = selectedColorGroup?.filter((fieldId) =>
+    !properties.some((property) => property.field_id === fieldId && property.owner_id === myId)
+  ) ?? [];
+  const hasFullColorGroup = !!selectedColorGroup && missingColorFields.length === 0;
+  const isBuildableCity = !!selectedColorGroup;
+  const selectedBuildCost = Math.ceil((selectedField?.price ?? 0) * 0.5);
+  const canBuildSelected = canManageSelected && hasFullColorGroup &&
+    !auction && !auctionBusy && (selectedProperty?.building_level ?? 0) < 5 &&
+    (gameState.balances?.[myId ?? ""] ?? 0) >= selectedBuildCost;
+
 
 
 
@@ -482,7 +501,7 @@ function GameContent() {
         )}
         {selectedProperty && selectedField && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onClick={() => setSelectedFieldId(null)}>
-            <section role="dialog" aria-modal="true" aria-label={`Nieruchomość ${selectedField.name}`} onClick={(event) => event.stopPropagation()} className="w-full max-w-sm rounded-2xl border border-amber-300/25 bg-[#172235] p-5 text-white shadow-2xl">
+            <section role="dialog" aria-modal="true" aria-label={`Nieruchomość ${selectedField.name}`} onClick={(event) => event.stopPropagation()} className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-amber-300/25 bg-[#172235] p-5 text-white shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div><p className="text-[10px] font-bold uppercase tracking-widest text-amber-300">Nieruchomość</p><h3 className="mt-1 text-xl font-black">{selectedField.name}</h3></div>
                 <button type="button" onClick={() => setSelectedFieldId(null)} className="rounded-lg bg-white/10 px-3 py-1 text-lg" aria-label="Zamknij">×</button>
@@ -495,6 +514,27 @@ function GameContent() {
               {isMySelectedProperty ? (
                 <div className="mt-4 space-y-2">
                   <p className="text-xs text-slate-400">Zarządzanie nieruchomością jest dostępne podczas Twojej fazy decyzji.</p>
+                  {isBuildableCity && !hasFullColorGroup && (
+                    <p className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-xs text-amber-100">
+                      🔒 Aby budować, musisz posiadać cały kolor. Brakuje: {missingColorFields.map((fieldId) => fields[fieldId]?.name ?? `Pole ${fieldId}`).join(", ")}.
+                    </p>
+                  )}
+                  {!isBuildableCity && (
+                    <p className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
+                      Na stacjach i innych polach specjalnych nie można budować domków.
+                    </p>
+                  )}
+                  {isBuildableCity && selectedProperty.building_level < 5 && (
+                    <button type="button"
+                      disabled={!canBuildSelected}
+                      onClick={() => void buildProperty(selectedProperty.field_id)}
+                      className="w-full rounded-xl bg-emerald-400 px-3 py-3 text-sm font-black text-slate-950 disabled:opacity-40">
+                      {selectedProperty.building_level === 4 ? "🏨 Wybuduj hotel" : "🏠 Wybuduj domek"} — ${selectedBuildCost}
+                    </button>
+                  )}
+                  {isBuildableCity && selectedProperty.building_level >= 5 && (
+                    <p className="text-xs font-semibold text-emerald-300">🏨 Hotel już wybudowany — maksymalny poziom zabudowy.</p>
+                  )}
                   {selectedProperty.building_level > 0 && <button type="button" disabled={!canManageSelected} onClick={async () => { await sellBuilding(selectedProperty.field_id); }} className="w-full rounded-xl bg-rose-400/15 px-3 py-3 text-sm font-bold text-rose-200 disabled:opacity-40">💰 Sprzedaj budynek</button>}
                   {selectedProperty.building_level === 0 && <button type="button" disabled={!canManageSelected} onClick={async () => { await sellProperty(selectedProperty.field_id); setSelectedFieldId(null); }} className="w-full rounded-xl bg-amber-300 px-3 py-3 text-sm font-black text-[#172033] disabled:opacity-40">💰 Sprzedaj do banku</button>}
                   <button type="button" disabled={!canManageSelected || selectedProperty.building_level !== 0 || !!auction || auctionBusy} onClick={() => void startAuction(selectedProperty.field_id)} className="w-full rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-3 text-sm font-bold text-amber-200 disabled:opacity-40">🔨 Wystaw na aukcję</button>
@@ -508,67 +548,6 @@ function GameContent() {
           {gameState.last_start_bonus && <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-center"><p className="text-sm font-bold text-emerald-200">💰 Premia za START</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_start_bonus?.player_id)?.nickname ?? "Gracz"} ukończył okrążenie</p><p className="text-xl font-black text-emerald-300">+${gameState.last_start_bonus.amount}</p></div>}
           {gameState.last_rent && <div className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-center"><p className="text-sm font-bold text-amber-200">💸 Zapłacono czynsz</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_rent?.from_player)?.nickname ?? "Gracz"} → {players.find((p) => p.player_id === gameState.last_rent?.to_player)?.nickname ?? "Gracz"} · {fields[gameState.last_rent.field_id]?.name ?? "Nieruchomość"}</p><p className="text-xl font-black text-amber-200">${gameState.last_rent.amount}</p></div>}
         </div>
-
-        {myTurn && gameState.turn_phase === "decision" && (
-          <section className="px-3 pt-3">
-            <div className="rounded-2xl border border-white/10 bg-[#172235] p-4">
-              <h3 className="mb-1 text-sm font-bold text-white">🏗️ Zarządzanie miastami</h3>
-              <p className="mb-3 text-[11px] text-slate-400">
-                Buduj domki i hotele, sprzedawaj budynki albo oddaj miasto do banku.
-              </p>
-              {properties.filter((p) => p.owner_id === myId).length === 0 ? (
-                <p className="text-xs text-slate-400">Najpierw kup swoje pierwsze miasto.</p>
-              ) : (
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {properties.filter((p) => p.owner_id === myId).map((property) => {
-                    const level = property.building_level ?? 0;
-                    const price = fields[property.field_id]?.price ?? 0;
-                    const cost = Math.ceil(price * 0.5);
-                    const buildingRefund = Math.floor(cost * 0.5);
-                    const cityRefund = Math.floor(price * 0.5);
-                    const canAfford = (gameState.balances?.[myId!] ?? 0) >= cost;
-                    return (
-                      <div key={property.field_id} className="rounded-xl border border-white/5 bg-white/5 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-bold text-white">
-                              {fields[property.field_id]?.name ?? `Pole ${property.field_id}`}
-                            </p>
-                            <p className="text-[11px] text-slate-400">
-                              {level === 5 ? "🏨 Hotel" : level === 0 ? "Bez budynków" : `🏠 ${level}/4 domków`}
-                            </p>
-                          </div>
-                          <span className="text-xs font-bold text-amber-200">${price}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {level < 5 && (
-                            <button type="button" onClick={() => buildProperty(property.field_id)}
-                              disabled={busy || !canAfford}
-                              className="rounded-lg bg-emerald-400 px-3 py-2 text-[11px] font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">
-                              {level === 4 ? `🏨 HOTEL −$${cost}` : `🏠 BUDUJ −$${cost}`}
-                            </button>
-                          )}
-                          {level > 0 && (
-                            <button type="button" onClick={() => sellBuilding(property.field_id)} disabled={busy}
-                              className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-[11px] font-black text-rose-200 disabled:opacity-40">
-                              💰 SPRZEDAJ BUDYNEK +${buildingRefund}
-                            </button>
-                          )}
-                          {level === 0 && (
-                            <button type="button" onClick={() => sellProperty(property.field_id)} disabled={busy}
-                              className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] font-black text-amber-200 disabled:opacity-40">
-                              🏙️ SPRZEDAJ MIASTO +${cityRefund}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
 
         <section className="mt-auto px-3 pt-3">
           <div className="rounded-2xl border border-white/10 bg-[#172235] p-4 shadow-xl">
