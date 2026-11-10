@@ -193,17 +193,9 @@ function RoomContent() {
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e3050_0%,#0b1220_52%,#080d17_100%)] px-3 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 text-white sm:px-6 sm:py-6">
       <div className="mx-auto w-full max-w-[480px] space-y-3 sm:space-y-4">
-        <header className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0d1626]/90 px-4 py-3 shadow-xl sm:px-5 sm:py-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-300/80">Polska edycja · multiplayer</p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">CITY <span className="text-amber-300">ROLL</span></h1>
-          </div>
-          <div className="flex h-10 w-10 shrink-0 items-center sm:h-12 sm:w-12 justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 text-2xl">🏙️</div>
-        </header>
-
         <section className="rounded-2xl border border-white/10 bg-[#172235] p-4 text-center sm:p-5 shadow-xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-amber-200">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-300" /> Poczekalnia graczy
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-300" /> CITY ROLL · Poczekalnia
           </div>
           <p className="text-xs text-slate-400">Kod zaproszenia dla znajomych</p>
           <div className="my-3 rounded-xl sm:my-4 border border-dashed border-amber-300/30 bg-[#0d1626] px-2 py-3 sm:px-3 sm:py-4">
@@ -250,19 +242,40 @@ function RoomContent() {
                 </div>
               );
             })}
-            {Array.from({ length: Math.max(0, room.max_players - players.length) }, (_, index) => (
-              <div key={`empty-${index}`} className="flex items-center gap-3 rounded-xl border border-dashed border-white/10 px-3 py-3 opacity-60">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-xl text-slate-500">+</div>
-                <span className="text-xs text-slate-400">Wolne miejsce — oczekiwanie na gracza</span>
-              </div>
-            ))}
+            {players.length < room.max_players && (
+              <p className="pt-2 text-center text-[11px] text-slate-400">
+                {room.max_players - players.length === 1
+                  ? "1 wolne miejsce — dodatkowy gracz opcjonalny"
+                  : `${room.max_players - players.length} wolne miejsca — kolejni gracze opcjonalni`}
+              </p>
+            )}
           </div>
         </section>
 
         <section className="space-y-2 rounded-2xl sm:space-y-3 border border-white/10 bg-[#172235] p-3 shadow-xl sm:p-4">
-          <button onClick={handleReady} disabled={busy || !me} className={`min-h-12 w-full rounded-xl px-4 py-3 text-sm font-black sm:py-4 transition disabled:cursor-not-allowed disabled:opacity-40 ${me?.is_ready ? "border border-emerald-300/30 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20" : "bg-gradient-to-r from-emerald-400 to-teal-400 text-[#08251d] hover:brightness-110"}`}>
-            {me?.is_ready ? "✓ JESTEM GOTOWY — ZMIEŃ STATUS" : "✓ JESTEM GOTOWY"}
-          </button>
+        {!isHost && me?.is_ready && (
+  <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-center">
+    <p className="text-sm font-bold text-emerald-300">
+      ✓ Jesteś gotowy!
+    </p>
+    <p className="mt-1 text-xs text-slate-300">
+      Oczekiwanie na rozpoczęcie gry przez gospodarza...
+    </p>
+  </div>
+)}
+      <button
+  onClick={handleReady}
+  disabled={busy || !me}
+  className={`w-full rounded-xl p-4 font-black text-white shadow-lg transition-all disabled:opacity-40 ${
+    me?.is_ready
+      ? "bg-red-500 hover:bg-red-400 shadow-red-500/20"
+      : "bg-green-500 hover:bg-green-400 shadow-green-500/20"
+  }`}
+>
+  {me?.is_ready
+    ? "✕ NIE JESTEM GOTOWY"
+    : "✓ JESTEM GOTOWY"}
+</button>
 
           {isHost && (
             <>
