@@ -4,8 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/src/lib/supabase/client";
 import type { Player, Property, GameState, RoomStatus } from "@/src/features/game/types";
-import { fields, cityPrices, specialIds } from "@/src/features/game/config";
-import { PlayerCard } from "@/src/features/game/components/PlayerCard";
+import { fields, cityPrices, specialIds, pawnIcon } from "@/src/features/game/config";
 import { GameBoard } from "@/src/features/game/components/GameBoard";
 
 type Auction = { id: string; room_id: string; field_id: number; seller_id: string; starting_price: number; highest_bid: number | null; highest_bidder: string | null; ends_at: string; status: string };
@@ -418,11 +417,11 @@ function GameContent() {
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e3050_0%,#0b1220_52%,#080d17_100%)] text-white">
       <style>{`@keyframes bankrollDiceSpin { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); } 100% { transform: rotateX(1080deg) rotateY(1440deg) rotateZ(360deg); } } .bankroll-dice-spin { animation: bankrollDiceSpin 850ms linear infinite; } @keyframes bankrollPawnHop { 0% { transform: translateY(3px) scale(.9) rotate(-8deg); } 45% { transform: translateY(-8px) scale(1.14) rotate(5deg); } 100% { transform: translateY(0) scale(1); } } .bankroll-pawn-hop { animation: bankrollPawnHop 290ms ease-out; }`}</style>
-      <div className="mx-auto flex min-h-screen w-full max-w-[480px] flex-col border-x border-white/5 bg-[#0d1626]/80 pb-4 shadow-2xl">
-        <header className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col border-x border-white/5 bg-[#0d1626]/80 pb-4 shadow-2xl">
+        <header className="flex items-center justify-between border-b border-white/10 px-3 py-2">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-300/80">Polska edycja</p>
-            <h1 className="text-2xl font-black tracking-tight">CITY <span className="text-amber-300">ROLL</span></h1>
+            <h1 className="text-lg font-black tracking-tight">CITY <span className="text-amber-300">ROLL</span></h1>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-wider text-slate-400">Tura</p>
@@ -447,7 +446,13 @@ function GameContent() {
           </section>
         )}
 
-        <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">{players.slice(0, 2).map((p, i) => <PlayerCard key={p.player_id} player={p} index={i} gameState={gameState} myId={myId} properties={properties} />)}</div>
+        <div className="grid grid-cols-2 gap-1.5 px-2 py-2">{players.map((p) => (
+          <div key={p.player_id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 ${p.player_id === gameState.current_turn ? "border-amber-300/60 bg-amber-300/10" : "border-white/10 bg-white/5"}`}>
+            <span className="shrink-0 text-lg">{pawnIcon(p.pawn_id)}</span>
+            <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold">{p.nickname}{p.player_id === myId ? " (Ty)" : ""}</p><p className="text-[11px] font-extrabold text-emerald-300">${(gameState.balances?.[p.player_id] ?? 0).toLocaleString("en-US")}</p></div>
+            {p.is_bankrupt && <span className="text-[10px] text-rose-300">💀</span>}
+          </div>
+        ))}</div>
 
         <GameBoard players={players} properties={properties} gameState={gameState} animatedPositions={animatedPositions} currentPlayer={currentPlayer} activePosition={activePosition} diceRolling={diceRolling} hasDice={hasDice} onSelectProperty={setSelectedFieldId} />
         {auction && (
@@ -498,7 +503,6 @@ function GameContent() {
             </section>
           </div>
         )}
-        {players.length > 2 && <div className="grid grid-cols-2 gap-2 px-3 py-3">{players.slice(2, 4).map((p, i) => <PlayerCard key={p.player_id} player={p} index={i + 2} gameState={gameState} myId={myId} properties={properties} />)}</div>}
 
         <div className="space-y-2 px-3 pt-3">
           {gameState.last_start_bonus && <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-center"><p className="text-sm font-bold text-emerald-200">💰 Premia za START</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_start_bonus?.player_id)?.nickname ?? "Gracz"} ukończył okrążenie</p><p className="text-xl font-black text-emerald-300">+${gameState.last_start_bonus.amount}</p></div>}

@@ -20,8 +20,8 @@ export function GameBoard({ players, properties, gameState, animatedPositions, c
   }
 
   return (
-    <div className="px-2 sm:px-3">
-      <div className="grid aspect-square grid-cols-8 grid-rows-8 gap-[2px] overflow-hidden rounded-2xl border border-white/10 bg-[#060b15] p-[3px] shadow-[0_14px_45px_rgba(0,0,0,0.35)]">
+    <div className="px-1 sm:px-2">
+      <div className="grid aspect-square grid-cols-8 grid-rows-8 gap-[1px] overflow-hidden rounded-xl border border-white/10 bg-[#060b15] p-[2px] shadow-[0_14px_45px_rgba(0,0,0,0.35)]">
         {fields.map((field) => {
           const pos = getPosition(field.id);
           const owner = properties.find((p) => p.field_id === field.id);
@@ -34,14 +34,14 @@ export function GameBoard({ players, properties, gameState, animatedPositions, c
               style={{ gridRow: pos.row, gridColumn: pos.col, borderTopColor: isSpecial ? "#fbbf24" : field.color }}
               title={`${field.name}${field.price !== null ? ` • $${field.price}` : ""}${ownerPlayer ? ` • właściciel: ${ownerPlayer.nickname}` : ""}`}
               className={`relative flex min-h-0 min-w-0 flex-col items-center justify-between overflow-hidden rounded-[5px] border border-t-[4px] px-[1px] py-[2px] text-center disabled:cursor-default ${owner ? "cursor-pointer" : ""} ${isActive ? "border-x-amber-300/70 border-b-amber-300/70 bg-[#34435a]" : "border-x-white/5 border-b-white/5 bg-[#1a283b]"}`}>
-              <span className="w-full break-words text-center text-[clamp(5px,1.55vw,8px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-slate-100">{field.name}</span>
+              <span className="w-full break-words text-center text-[clamp(6px,1.8vw,11px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-slate-100">{field.name}</span>
               <div className="flex min-h-0 flex-col items-center justify-end gap-0">
-                {field.icon && <span className="text-[clamp(9px,2.6vw,15px)] leading-none">{field.icon}</span>}
-                {field.price !== null && <span className="text-[clamp(6px,1.65vw,9px)] font-black leading-none text-amber-200">${field.price}</span>}
+                {field.icon && <span className="text-[clamp(10px,2.8vw,17px)] leading-none">{field.icon}</span>}
+                {field.price !== null && <span className="text-[clamp(7px,1.9vw,11px)] font-black leading-none text-amber-200">${field.price}</span>}
                 {ownerPlayer && <span className="rounded bg-black/35 px-[2px] text-[clamp(9px,2.3vw,14px)] leading-none" title={`Właściciel: ${ownerPlayer.nickname} • zabudowa: ${owner?.building_level ?? 0}`}>
                   {pawnIcon(ownerPlayer.pawn_id)}
                 </span>}
-                {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map((player) => <span key={`${player.player_id}-${animatedPositions[player.player_id] ?? "idle"}`} title={player.nickname} className={`inline-block origin-bottom text-[clamp(12px,3vw,19px)] leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)] ${animatedPositions[player.player_id] !== undefined ? "bankroll-pawn-hop" : ""}`}>{pawnIcon(player.pawn_id)}</span>)}</div>}
+                {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map((player) => <span key={`${player.player_id}-${animatedPositions[player.player_id] ?? "idle"}`} title={player.nickname} className={`inline-block origin-bottom text-[clamp(13px,3.3vw,21px)] leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)] ${animatedPositions[player.player_id] !== undefined ? "bankroll-pawn-hop" : ""}`}>{pawnIcon(player.pawn_id)}</span>)}</div>}
               </div>
             </button>
           );
