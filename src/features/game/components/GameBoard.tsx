@@ -11,8 +11,8 @@ export function GameBoard({ players, properties, gameState, animatedPositions, c
 }) {
 
   return (
-    <div className="px-1 sm:px-2">
-      <div className="grid aspect-square grid-cols-8 grid-rows-8 gap-[1px] overflow-hidden rounded-xl border border-white/10 bg-[#060b15] p-[2px] shadow-[0_14px_45px_rgba(0,0,0,0.35)]">
+    <div className="flex min-h-0 justify-center px-1 sm:px-2">
+      <div style={{ gridTemplateColumns: "1.28fr repeat(6, 1fr) 1.28fr", gridTemplateRows: "1.28fr repeat(6, 1fr) 1.28fr" }} className="grid aspect-square w-full max-w-[min(100%,calc(100dvh-205px))] gap-[1px] overflow-hidden rounded-xl border border-white/10 bg-[#060b15] p-[2px] shadow-[0_14px_45px_rgba(0,0,0,0.35)]">
         {fields.map((field) => {
           const pos = getPosition(field.id);
           const owner = properties.find((p) => p.field_id === field.id);
@@ -24,20 +24,20 @@ export function GameBoard({ players, properties, gameState, animatedPositions, c
             <button key={field.id} type="button" disabled={!owner || !onSelectProperty} onClick={() => onSelectProperty?.(field.id)}
               style={{ gridRow: pos.row, gridColumn: pos.col, borderTopColor: isSpecial ? "#fbbf24" : field.color }}
               title={`${field.name}${field.price !== null ? ` • $${field.price}` : ""}${ownerPlayer ? ` • właściciel: ${ownerPlayer.nickname}` : ""}`}
-              className={`relative flex min-h-0 min-w-0 flex-col items-center justify-between overflow-hidden rounded-[5px] border border-t-[4px] px-[1px] py-[2px] text-center disabled:cursor-default ${owner ? "cursor-pointer" : ""} ${isActive ? "border-x-amber-300/70 border-b-amber-300/70 bg-[#34435a]" : "border-x-white/5 border-b-white/5 bg-[#1a283b]"}`}>
-              <span className="w-full break-words text-center text-[clamp(6px,1.8vw,11px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-slate-100">{field.name}</span>
+              className={`relative flex min-h-0 min-w-0 flex-col items-center justify-between overflow-hidden rounded-[5px] border border-t-[3px] px-[1px] py-[1px] text-center disabled:cursor-default ${owner ? "cursor-pointer" : ""} ${isActive ? "border-x-amber-300/70 border-b-amber-300/70 bg-[#34435a]" : "border-x-white/5 border-b-white/5 bg-[#1a283b]"}`}>
+              <span className="w-full break-words text-center text-[clamp(6px,1.8vw,10px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-slate-100">{field.name}</span>
               <div className="flex min-h-0 flex-col items-center justify-end gap-0">
                 {field.icon && <span className="text-[clamp(10px,2.8vw,17px)] leading-none">{field.icon}</span>}
                 {field.price !== null && <span className="text-[clamp(7px,1.9vw,11px)] font-black leading-none text-amber-200">${field.price}</span>}
                 {ownerPlayer && <span className="rounded bg-black/35 px-[2px] text-[clamp(9px,2.3vw,14px)] leading-none" title={`Właściciel: ${ownerPlayer.nickname} • zabudowa: ${owner?.building_level ?? 0}`}>
                   {pawnIcon(ownerPlayer.pawn_id)}
                 </span>}
-                {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map((player) => <span key={`${player.player_id}-${animatedPositions[player.player_id] ?? "idle"}`} title={player.nickname} className={`inline-block origin-bottom text-[clamp(13px,3.3vw,21px)] leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)] ${animatedPositions[player.player_id] !== undefined ? "bankroll-pawn-hop" : ""}`}>{pawnIcon(player.pawn_id)}</span>)}</div>}
+                {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map((player) => <span key={`${player.player_id}-${animatedPositions[player.player_id] ?? "idle"}`} title={player.nickname} className={`inline-block origin-bottom text-[clamp(12px,3vw,19px)] leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)] ${animatedPositions[player.player_id] !== undefined ? "bankroll-pawn-hop" : ""}`}>{pawnIcon(player.pawn_id)}</span>)}</div>}
               </div>
             </button>
           );
         })}
-        <div style={{ gridRow: "2 / 8", gridColumn: "2 / 8" }} className="relative flex min-h-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-sky-200/10 bg-[radial-gradient(circle_at_50%_20%,#2d4663_0%,#18263c_50%,#101b2e_100%)] p-2 text-center">
+        <div style={{ gridRow: "2 / 8", gridColumn: "2 / 8" }} className="relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-sky-200/10 bg-[radial-gradient(circle_at_50%_20%,#2d4663_0%,#18263c_50%,#101b2e_100%)] p-2 text-center">
           <p className="max-w-full truncate text-[clamp(9px,2.5vw,13px)] font-semibold text-slate-300">{currentPlayer?.nickname ?? "Oczekiwanie"} • {gameState.turn_phase === "roll" ? "rzut kostkami" : "decyzja"}</p>
           <div className="flex items-center justify-center gap-2">{[gameState.dice_1, gameState.dice_2].map((die, i) => <Dice3D key={i} value={die} rolling={diceRolling} />)}</div>
           <p className="text-[clamp(12px,3.3vw,20px)] font-black text-amber-200">{diceRolling ? "🎲 Rzut..." : hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Rzuć kostkami"}</p>

@@ -470,8 +470,8 @@ function GameContent() {
           </section>
         )}
 
-        <div className="grid grid-cols-2 gap-1.5 px-2 py-2">{players.map((p) => (
-          <div key={p.player_id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 ${p.player_id === gameState.current_turn ? "border-amber-300/60 bg-amber-300/10" : "border-white/10 bg-white/5"}`}>
+        <div className="grid grid-cols-2 gap-1 px-2 py-1">{players.map((p) => (
+          <div key={p.player_id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1 ${p.player_id === gameState.current_turn ? "border-amber-300/60 bg-amber-300/10" : "border-white/10 bg-white/5"}`}>
             <span className="shrink-0 text-lg">{pawnIcon(p.pawn_id)}</span>
             <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold">{p.nickname}{p.player_id === myId ? " (Ty)" : ""}</p><p className="text-[11px] font-extrabold text-emerald-300">${(gameState.balances?.[p.player_id] ?? 0).toLocaleString("en-US")}</p></div>
             {p.is_bankrupt && <span className="text-[10px] text-rose-300">💀</span>}
@@ -549,9 +549,9 @@ function GameContent() {
           </div>
         )}
 
-        <section className="mt-auto px-3 pt-3">
-          <div className="rounded-xl border border-white/10 bg-[#172235] p-2.5 shadow-xl">
-            <div className="mb-2 flex items-center justify-between gap-2">
+        <section className="mt-auto px-2 pt-1.5">
+          <div className="rounded-xl border border-white/10 bg-[#172235] p-2 shadow-xl">
+            <div className="mb-1 flex items-center justify-between gap-2">
               <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Aktualny ruch</p><p className="truncate text-sm font-bold text-white">{myTurn ? "✨ Twoja kolej!" : `⏳ ${currentPlayer?.nickname ?? "Oczekiwanie"}`}</p></div>
               <span className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold text-slate-300">{gameState.turn_phase === "roll" ? "RZUT" : "DECYZJA"}</span>
             </div>
@@ -559,22 +559,22 @@ function GameContent() {
             {gameState.turn_phase === "roll" ? (
               <button onClick={rollDice} disabled={!myTurn || busy} className="w-full rounded-xl bg-gradient-to-r from-amber-300 to-yellow-500 px-4 py-4 text-sm font-black tracking-wide text-[#172033] shadow-[0_6px_20px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "🎲 RZUCANIE / RUCH PIONKA..." : "🎲 RZUĆ KOSTKAMI"}</button>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {showPurchasePrompt && (
-                  <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-2.5">
-                    <p className="mb-2 text-center text-sm font-bold">Czy chcesz kupić {activeField?.name ?? "to miasto"} za ${propertyPrice}?</p>
+                  <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-2">
+                    <p className="mb-1 text-center text-xs font-bold">Czy chcesz kupić {activeField?.name ?? "to miasto"} za ${propertyPrice}?</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button type="button" onClick={() => void buyProperty()}
                         disabled={busy || !!auction || activeBalance < propertyPrice}
-                        className="rounded-lg bg-emerald-400 px-2 py-2.5 text-xs font-black text-slate-950 disabled:opacity-40">{busy ? "Kupowanie..." : "✅ Kupuję"}</button>
+                        className="rounded-lg bg-emerald-400 px-2 py-2 text-xs font-black text-slate-950 disabled:opacity-40">{busy ? "Kupowanie..." : "✅ Kupuję"}</button>
                       <button type="button" onClick={() => setDeclinedPurchaseKey(purchaseKey)}
                         disabled={busy || !!auction}
-                        className="rounded-lg border border-white/15 bg-white/10 px-2 py-2.5 text-xs font-bold text-white disabled:opacity-40">✕ Odrzuć</button>
+                        className="rounded-lg border border-white/15 bg-white/10 px-2 py-2 text-xs font-bold text-white disabled:opacity-40">✕ Odrzuć</button>
                     </div>
                     {activeBalance < propertyPrice && <p className="mt-1 text-center text-[11px] text-rose-300">Nie masz wystarczająco pieniędzy.</p>}
                   </div>
                 )}
-                <button onClick={finishTurn} disabled={!myTurn || busy || !!auction || (gameState.balances?.[myId ?? ""] ?? 0) < 0} className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "KOŃCZENIE TURY..." : "⏭️ ZAKOŃCZ TURĘ"}</button>
+                <button onClick={finishTurn} disabled={!myTurn || busy || !!auction || (gameState.balances?.[myId ?? ""] ?? 0) < 0} className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-bold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40">{busy ? "KOŃCZENIE TURY..." : "⏭️ ZAKOŃCZ TURĘ"}</button>
                 {myTurn && (gameState.balances?.[myId ?? ""] ?? 0) < 0 && (
                   <div className="space-y-2 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3">
                     <p className="text-xs text-rose-200">Masz ujemne saldo. Sprzedaj budynki lub miasta, aby spłacić dług. Możesz też ogłosić bankructwo.</p>
