@@ -23,6 +23,7 @@ export default function HomePage() {
   const [selectedPawn, setSelectedPawn] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<"create" | "join" | null>(null);
 
   function validate(): boolean {
     if (nickname.trim().length < 2) {
@@ -95,63 +96,67 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center">
-          <h1 className="text-5xl font-black text-yellow-400">BANK ROLL</h1>
-          <p className="text-slate-400 mt-3">Graj ze znajomymi online</p>
-        </div>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#080d17] px-4 py-10 text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,#243b5b_0%,#0c1525_48%,#080d17_85%)]" />
+      <div className="pointer-events-none absolute -left-28 top-16 h-72 w-72 rounded-full bg-sky-500/10 blur-[90px]" />
+      <div className="pointer-events-none absolute -right-24 bottom-12 h-72 w-72 rounded-full bg-amber-400/10 blur-[90px]" />
 
-        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 space-y-5">
-          <div>
-            <label htmlFor="nickname" className="block mb-2 text-sm">Twój nick</label>
-            <input id="nickname" type="text" maxLength={20} value={nickname}
-              onChange={(e) => setNickname(e.target.value)} placeholder="Wpisz nick..."
-              className="w-full rounded-lg bg-slate-800 border border-slate-600 p-3 outline-none focus:border-yellow-400" />
-          </div>
+      <div className="relative z-10 w-full max-w-[440px]">
+        <header className="mb-8 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[22px] border border-amber-300/25 bg-gradient-to-br from-[#293e59] to-[#142137] text-3xl shadow-[0_12px_40px_rgba(0,0,0,.4)]">🏙️</div>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[.35em] text-amber-300/75">Polska edycja · Multiplayer</p>
+          <h1 className="text-5xl font-black tracking-[-.06em] sm:text-6xl">CITY <span className="text-amber-300">ROLL</span></h1>
+          <p className="mt-3 text-sm text-slate-400">Kupuj miasta. Buduj imperium. Wygrywaj ze znajomymi.</p>
+        </header>
 
-          <div>
-            <p className="mb-2 text-sm font-semibold">Wybierz swoją postać</p>
-            <div className="grid grid-cols-4 gap-2">
-              {pawnOptions.map((pawn) => (
-                <button key={pawn.id} type="button" disabled={loading}
-                  aria-pressed={selectedPawn === pawn.id}
-                  onClick={() => { setSelectedPawn(pawn.id); setError(""); }}
-                  className={`flex flex-col items-center gap-1 rounded-xl border p-2 transition disabled:opacity-50 ${selectedPawn === pawn.id ? "border-yellow-400 bg-yellow-400/15 ring-1 ring-yellow-400" : "border-slate-700 bg-slate-800 hover:border-slate-500"}`}>
-                  <span className="text-3xl">{pawn.icon}</span>
-                  <span className="text-[11px] font-semibold">{pawn.name}</span>
-                </button>
-              ))}
+        <section className="rounded-[28px] border border-white/10 bg-[#142137]/90 p-5 shadow-[0_24px_70px_rgba(0,0,0,.45)] backdrop-blur-xl sm:p-7">
+          {mode === null ? (
+            <div className="space-y-4">
+              <div className="mb-6 text-center">
+                <h2 className="text-xl font-extrabold">Gotowy do gry?</h2>
+                <p className="mt-1 text-xs text-slate-400">Wybierz, jak chcesz rozpocząć rozgrywkę</p>
+              </div>
+              <button type="button" onClick={() => { setMode("create"); setError(""); }}
+                className="group flex w-full items-center gap-4 rounded-2xl border border-amber-200/30 bg-gradient-to-r from-amber-300 to-yellow-500 px-5 py-5 text-left text-[#162033] shadow-[0_10px_30px_rgba(245,158,11,.15)] transition hover:-translate-y-0.5 hover:brightness-110">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-black/10 text-2xl">＋</span>
+                <span className="flex-1"><span className="block text-base font-black">Utwórz pokój</span><span className="block text-xs font-medium opacity-75">Zaproś znajomych do swojej gry</span></span>
+                <span className="text-xl font-bold">›</span>
+              </button>
+              <button type="button" onClick={() => { setMode("join"); setError(""); }}
+                className="group flex w-full items-center gap-4 rounded-2xl border border-sky-300/20 bg-[#233750] px-5 py-5 text-left transition hover:-translate-y-0.5 hover:border-sky-300/50 hover:bg-[#2b4260]">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-2xl">👥</span>
+                <span className="flex-1"><span className="block text-base font-black">Dołącz do pokoju</span><span className="block text-xs text-slate-400">Masz kod od znajomego?</span></span>
+                <span className="text-xl font-bold text-slate-400">›</span>
+              </button>
+              <div className="flex items-center justify-center gap-2 pt-3 text-[11px] text-slate-500"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Gra online w czasie rzeczywistym</div>
             </div>
-            <p className="mt-2 text-center text-xs text-slate-400">
-              {selectedPawn === null ? "Wybierz pionek, aby rozpocząć" : `Wybrano: ${pawnOptions[selectedPawn].icon} ${pawnOptions[selectedPawn].name}`}
-            </p>
-          </div>
-
-          <button type="button" onClick={handleCreateRoom} disabled={loading}
-            className="w-full bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-black font-bold py-3 rounded-lg">
-            Utwórz pokój
-          </button>
-
-          <div className="flex items-center gap-3 text-slate-500">
-            <div className="h-px bg-slate-700 flex-1" />LUB<div className="h-px bg-slate-700 flex-1" />
-          </div>
-
-          <div>
-            <label htmlFor="roomCode" className="block mb-2 text-sm">Kod pokoju</label>
-            <input id="roomCode" type="text" maxLength={6} value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="NP. ABC123"
-              className="w-full rounded-lg bg-slate-800 border border-slate-600 p-3 uppercase tracking-widest outline-none focus:border-yellow-400" />
-          </div>
-
-          <button type="button" onClick={handleJoinRoom} disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 font-bold py-3 rounded-lg">
-            Dołącz do pokoju
-          </button>
-
-          {error && <p role="alert" className="text-red-400 text-sm text-center">{error}</p>}
-          {loading && <p className="text-yellow-400 text-sm text-center">Zapisywanie postaci...</p>}
-        </div>
+          ) : (
+            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); void (mode === "create" ? handleCreateRoom() : handleJoinRoom()); }}>
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-amber-300/75">CITY ROLL</p><h2 className="mt-1 text-xl font-black">{mode === "create" ? "Nowy pokój" : "Dołącz do gry"}</h2></div>
+                <button type="button" disabled={loading} onClick={() => { setMode(null); setError(""); }} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/10 disabled:opacity-50">← Wróć</button>
+              </div>
+              <div>
+                <label htmlFor="nickname" className="mb-2 block text-xs font-bold text-slate-300">TWÓJ NICK</label>
+                <input id="nickname" type="text" maxLength={20} autoComplete="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="Wpisz tutaj" className="w-full rounded-xl border border-white/10 bg-[#0d192b] px-4 py-3.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-amber-300/70 focus:ring-2 focus:ring-amber-300/10" />
+              </div>
+              <div>
+                <div className="mb-3 flex items-center justify-between"><p className="text-xs font-bold text-slate-300">WYBIERZ POSTAĆ</p><span className="text-[10px] text-slate-500">8 postaci</span></div>
+                <div className="grid grid-cols-4 gap-2">
+                  {pawnOptions.map((pawn) => (
+                    <button key={pawn.id} type="button" disabled={loading} aria-pressed={selectedPawn === pawn.id} onClick={() => { setSelectedPawn(pawn.id); setError(""); }} className={`relative flex min-h-[82px] flex-col items-center justify-center gap-1 rounded-xl border p-2 transition hover:-translate-y-0.5 disabled:opacity-50 ${selectedPawn === pawn.id ? "border-amber-300 bg-amber-300/15 shadow-[inset_0_0_0_1px_rgba(252,211,77,.25)]" : "border-white/10 bg-[#1d2d44] hover:border-white/30"}`}>
+                      {selectedPawn === pawn.id && <span className="absolute right-1 top-1 text-[10px] text-amber-300">✓</span>}
+                      <span className="text-[28px] leading-none">{pawn.icon}</span><span className={`text-[10px] font-semibold ${selectedPawn === pawn.id ? "text-amber-200" : "text-slate-300"}`}>{pawn.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {mode === "join" && <div><label htmlFor="roomCode" className="mb-2 block text-xs font-bold text-slate-300">KOD POKOJU</label><input id="roomCode" type="text" maxLength={6} autoCapitalize="characters" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="NP. ABC123" className="w-full rounded-xl border border-white/10 bg-[#0d192b] px-4 py-3.5 text-center text-lg font-black uppercase tracking-[.25em] text-white outline-none transition placeholder:text-slate-600 focus:border-amber-300/70 focus:ring-2 focus:ring-amber-300/10" /></div>}
+              <button type="submit" disabled={loading} className={`w-full rounded-xl px-4 py-4 text-sm font-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 ${mode === "create" ? "bg-gradient-to-r from-amber-300 to-yellow-500 text-[#162033]" : "bg-gradient-to-r from-sky-500 to-blue-600 text-white"}`}>{loading ? "Zapisywanie postaci..." : mode === "create" ? "✨ Utwórz pokój" : "👥 Dołącz do pokoju"}</button>
+            </form>
+          )}
+          {error && <p role="alert" className="mt-4 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-3 text-center text-xs text-rose-300">{error}</p>}
+        </section>
       </div>
     </main>
   );

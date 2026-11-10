@@ -3,102 +3,12 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/src/lib/supabase/client";
-
-type Player = { player_id: string; nickname: string; color: string; joined_at: string; is_bankrupt: boolean; pawn_id: number | null };
-type RoomStatus = { status: string; winner_id: string | null };
-type Property = { field_id: number; owner_id: string; building_level: number };
-type GameState = {
-  room_id: string;
-  current_turn: string | null;
-  positions: Record<string, number>;
-  balances: Record<string, number>;
-  dice_1: number | null;
-  dice_2: number | null;
-  turn_number: number;
-  turn_phase: "roll" | "decision";
-  last_rent: { from_player: string; to_player: string; field_id: number; amount: number } | null;
-  last_start_bonus?: { player_id: string; amount: number } | null;
-};
-
-const pawnOptions = [
-  { id: 0, icon: "🐶", name: "Pies" },
-  { id: 1, icon: "🐱", name: "Kot" },
-  { id: 2, icon: "⚡", name: "Pikachu" },
-  { id: 3, icon: "🦊", name: "Lis" },
-  { id: 4, icon: "🐼", name: "Panda" },
-  { id: 5, icon: "🐸", name: "Żaba" },
-  { id: 6, icon: "🤖", name: "Robot" },
-  { id: 7, icon: "👻", name: "Duszek" },
-];
-function pawnIcon(pawn: number | null | undefined) {
-  return pawnOptions.find((option) => option.id === pawn)?.icon ?? "🎩";
-}
-const playerAccents = ["#fb7185", "#60a5fa", "#4ade80", "#facc15"];
-const cityNames = [
-  "START", "GDAŃSK", "GDYNIA", "SOPOT", "OLSZTYN", "TORUŃ", "BYDGOSZCZ",
-  "WIĘZIENIE", "SZCZECIN", "GORZÓW", "POZNAŃ", "ZIELONA GÓRA", "WROCŁAW", "OPOLE",
-  "PARKING", "KATOWICE", "KRAKÓW", "RZESZÓW", "LUBLIN", "KIELCE", "ŁÓDŹ",
-  "IDŹ DO WIĘZ.", "BIAŁYSTOK", "RADOM", "PŁOCK", "SIEDLCE", "WARSZAWA", "ZAKOPANE",
-];
-const groupColors = ["#fb7185", "#60a5fa", "#fbbf24", "#34d399", "#a78bfa", "#fb923c"];
-const specialIds = new Set([0, 7, 14, 21]);
-// Ceny według układu widocznego na zrzucie Plato, dostosowane do 28 pól.
-// START -> lewa krawędź -> góra -> prawa krawędź -> dół.
-const cityPrices: Array<number | null> = [
-  null, 180, 180, 345, 70, 395, 395,
-  null, 20, 20, 60, 70, 70, 60,
-  null, 590, 590, 80, 80, 80, 40,
-  null, 45, 50, 150, 35, 70, 150,
-];
-const fields = cityNames.map((name, id) => ({
-  id,
-  name,
-  price: cityPrices[id],
-  color: groupColors[Math.floor(id / 4) % groupColors.length],
-}));
-
-function getPosition(index: number) {
-  // START: lewy dolny róg. Ruch przeciwnie do poprzedniej wersji.
-  if (index < 8) return { row: 8 - index, col: 1 };
-  if (index < 15) return { row: 1, col: index - 6 };
-  if (index < 22) return { row: index - 13, col: 8 };
-  return { row: 8, col: 29 - index };
-}
+import type { Player, Property, GameState, RoomStatus } from "@/src/features/game/types";
+import { fields, cityPrices, specialIds } from "@/src/features/game/config";
+import { PlayerCard } from "@/src/features/game/components/PlayerCard";
+import { GameBoard } from "@/src/features/game/components/GameBoard";
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-function Dice3D({ value, rolling }: { value: number | null; rolling: boolean }) {
-  const faceRotations: Record<number, string> = {
-    1: "rotateX(0deg) rotateY(0deg)",
-    2: "rotateY(-90deg)",
-    3: "rotateX(-90deg)",
-    4: "rotateX(90deg)",
-    5: "rotateY(90deg)",
-    6: "rotateY(180deg)",
-  };
-  const faces = [
-    { n: 1, transform: "translateZ(20px)" },
-    { n: 2, transform: "rotateY(90deg) translateZ(20px)" },
-    { n: 3, transform: "rotateX(90deg) translateZ(20px)" },
-    { n: 4, transform: "rotateX(-90deg) translateZ(20px)" },
-    { n: 5, transform: "rotateY(-90deg) translateZ(20px)" },
-    { n: 6, transform: "rotateY(180deg) translateZ(20px)" },
-  ];
-  return (
-    <div className="relative h-12 w-12" style={{ perspective: "250px" }} aria-label={rolling ? "Kostka się obraca" : `Kostka: ${value ?? "?"}`}>
-      <div className={`absolute left-1 top-1 h-10 w-10 ${rolling ? "bankroll-dice-spin" : ""}`}
-        style={{ transformStyle: "preserve-3d", transform: rolling ? undefined : faceRotations[value ?? 1], transition: rolling ? "none" : "transform 450ms ease-out" }}>
-        {faces.map((face) => (
-          <div key={face.n} className="absolute inset-0 flex items-center justify-center rounded-lg border border-slate-300 bg-white text-xl font-black text-slate-900 shadow-inner"
-            style={{ transform: face.transform, backfaceVisibility: "hidden" }}>
-            {face.n}
-          </div>
-        ))}
-      </div>
-      {!rolling && value === null && <span className="absolute inset-0 flex items-center justify-center text-lg font-bold text-amber-300">?</span>}
-    </div>
-  );
-}
 
 function GameContent() {
   const params = useParams();
@@ -370,7 +280,7 @@ function GameContent() {
     }
   }
 
-  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#090e1a] text-slate-200">Ładowanie BANK ROLL...</main>;
+  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#090e1a] text-slate-200">Ładowanie CITY ROLL...</main>;
   if (!gameState) return <main className="min-h-screen bg-[#090e1a] p-8 text-center text-white">Nie udało się wczytać gry.<p className="mt-3 text-rose-400">{error}</p></main>;
 
   const gameFinished = roomStatus?.status === "finished";
@@ -385,27 +295,6 @@ function GameContent() {
   const activeBalance = gameState.current_turn ? gameState.balances?.[gameState.current_turn] ?? 0 : 0;
   const hasDice = gameState.dice_1 !== null && gameState.dice_2 !== null;
 
-  function renderPlayer(player: Player, index: number) {
-    const isCurrent = gameState!.current_turn === player.player_id;
-    const isMe = player.player_id === myId;
-    const owned = properties.filter((p) => p.owner_id === player.player_id).length;
-    return (
-      <div key={player.player_id} className={`relative min-w-0 rounded-2xl border p-3 transition-colors ${player.is_bankrupt ? "opacity-50 " : ""}${isCurrent ? "border-amber-300/70 bg-[#293348] shadow-[0_0_22px_rgba(251,191,36,0.12)]" : "border-white/10 bg-[#172235]"}`}>
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-lg">{pawnIcon(player.pawn_id)}</span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-white">{player.nickname}{isMe ? " (Ty)" : ""}</p>
-            <p className="text-[10px] text-slate-400">🏠 {owned} miast{owned === 1 ? "o" : ""}</p>
-          </div>
-        </div>
-        <div className="mt-2 flex items-end justify-between gap-1">
-          <span className="text-lg font-black tracking-tight" style={{ color: playerAccents[index] ?? "#fff" }}>${(gameState!.balances?.[player.player_id] ?? 1500).toLocaleString("en-US")}</span>
-          {player.is_bankrupt && <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[9px] font-black text-rose-300">BANKRUT</span>}
-          {isCurrent && <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[9px] font-black text-[#151b2b]">TURA</span>}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e3050_0%,#0b1220_52%,#080d17_100%)] text-white">
@@ -414,7 +303,7 @@ function GameContent() {
         <header className="flex items-center justify-between border-b border-white/10 px-4 py-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-300/80">Polska edycja</p>
-            <h1 className="text-2xl font-black tracking-tight">BANK <span className="text-amber-300">ROLL</span></h1>
+            <h1 className="text-2xl font-black tracking-tight">CITY <span className="text-amber-300">ROLL</span></h1>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-wider text-slate-400">Tura</p>
@@ -427,7 +316,7 @@ function GameContent() {
             <div className="text-5xl">🏆</div>
             <h2 className="mt-2 text-xl font-black text-amber-200">KONIEC GRY!</h2>
             <p className="mt-1 text-sm text-white">Zwycięzca: <strong>{winner?.nickname ?? "Nieznany gracz"}</strong></p>
-            {roomStatus?.winner_id === myId && <p className="mt-2 text-sm font-bold text-emerald-300">🎉 Wygrałeś BANK ROLL!</p>}
+            {roomStatus?.winner_id === myId && <p className="mt-2 text-sm font-bold text-emerald-300">🎉 Wygrałeś CITY ROLL!</p>}
             <div className="mt-3 space-y-1 text-left">
               {players.map((player) => (
                 <div key={player.player_id} className="flex justify-between rounded-lg bg-black/20 px-3 py-2 text-xs">
@@ -439,62 +328,10 @@ function GameContent() {
           </section>
         )}
 
-        <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">{players.slice(0, 2).map((p, i) => renderPlayer(p, i))}</div>
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-3">{players.slice(0, 2).map((p, i) => <PlayerCard key={p.player_id} player={p} index={i} gameState={gameState} myId={myId} properties={properties} />)}</div>
 
-        {/* Układ 8 × 8: dokładnie 28 pól na obwodzie, bank w środku. */}
-        <div className="px-2 sm:px-3">
-          <div className="grid aspect-square grid-cols-8 grid-rows-8 gap-[2px] overflow-hidden rounded-2xl border border-white/10 bg-[#060b15] p-[3px] shadow-[0_14px_45px_rgba(0,0,0,0.35)]">
-            {fields.map((field) => {
-              const pos = getPosition(field.id);
-              const owner = properties.find((p) => p.field_id === field.id);
-              const ownerIndex = players.findIndex((p) => p.player_id === owner?.owner_id);
-              const pawns = players.map((p, i) => ({ player: p, index: i })).filter(({ player }) => !player.is_bankrupt && (animatedPositions[player.player_id] ?? gameState.positions?.[player.player_id] ?? 0) === field.id);
-              const isActive = activePosition === field.id;
-              const isSpecial = field.price === null;
-              return (
-                <div key={field.id} style={{ gridRow: pos.row, gridColumn: pos.col, borderTopColor: isSpecial ? "#fbbf24" : field.color }}
-                  title={`${field.name}${field.price !== null ? ` • $${field.price}` : ""}${ownerIndex >= 0 ? ` • właściciel: ${players[ownerIndex].nickname}` : ""}`}
-                  className={`relative flex min-h-0 min-w-0 flex-col items-center justify-between overflow-hidden rounded-[5px] border border-t-[4px] px-[1px] py-[2px] text-center ${isActive ? "border-x-amber-300/70 border-b-amber-300/70 bg-[#34435a]" : "border-x-white/5 border-b-white/5 bg-[#1a283b]"}`}>
-                  <span className="w-full break-words text-center text-[clamp(5px,1.55vw,8px)] font-extrabold leading-[1.05] tracking-[-0.03em] text-slate-100">{field.name}</span>
-                  <div className="flex min-h-0 flex-col items-center justify-end gap-0">
-                    {field.price !== null ? <span className="text-[clamp(6px,1.65vw,9px)] font-black leading-none text-amber-200">${field.price}</span> : <span className="text-[clamp(9px,2.6vw,15px)] leading-none">{field.id === 0 ? "🚩" : field.id === 7 ? "🔒" : field.id === 14 ? "🅿️" : "🚓"}</span>}
-                    {owner && (
-                      <span
-                        className="flex items-center justify-center gap-[1px] rounded-[3px] bg-black/25 px-[1px] leading-none"
-                        title={`Zabudowa: ${owner.building_level === 5 ? "hotel" : `${owner.building_level} domków`} • ${field.name} • właściciel: ${ownerIndex >= 0 ? players[ownerIndex].nickname : "nieznany"}`}
-                      >
-                         <span className="text-[clamp(8px,2vw,12px)]">{owner.building_level === 5 ? "🏨" : "🏠"}</span>
-                         {owner.building_level > 0 && owner.building_level < 5 && (
-                           <span className="text-[7px] font-black text-white">{owner.building_level}</span>
-                         )}
-                        <span className="h-[6px] w-[6px] rounded-full border border-white/50" style={{ backgroundColor: playerAccents[ownerIndex] ?? "#fff" }} />
-                      </span>
-                    )}
-                    {pawns.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-0 leading-none">{pawns.map(({ player, index }) => <span key={`${player.player_id}-${animatedPositions[player.player_id] ?? "idle"}`} title={player.nickname} className={`inline-block origin-bottom text-[clamp(12px,3vw,19px)] leading-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)] ${animatedPositions[player.player_id] !== undefined ? "bankroll-pawn-hop" : ""}`}>{pawnIcon(player.pawn_id)}</span>)}</div>}
-                  </div>
-                </div>
-              );
-            })}
-
-            <div style={{ gridRow: "2 / 8", gridColumn: "2 / 8" }} className="relative flex min-h-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-sky-200/10 bg-[radial-gradient(circle_at_50%_20%,#2d4663_0%,#18263c_50%,#101b2e_100%)] p-2 text-center">
-              <div className="absolute inset-3 rounded-full border border-white/5" />
-              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 text-3xl shadow-lg">🏦</div>
-              <p className="relative text-[10px] font-bold uppercase tracking-[0.24em] text-amber-200/70">Polska edycja</p>
-              <h2 className="relative text-[clamp(18px,6vw,28px)] font-black tracking-tight">BANK <span className="text-amber-300">ROLL</span></h2>
-              <p className="relative max-w-[95%] truncate text-[11px] font-medium text-slate-300">{currentPlayer?.nickname ?? "Oczekiwanie"} • {gameState.turn_phase === "roll" ? "rzut kostkami" : "decyzja"}</p>
-              <div className="relative flex items-center gap-2">
-                {[gameState.dice_1, gameState.dice_2].map((die, i) => <Dice3D key={i} value={die} rolling={diceRolling} />)}
-              </div>
-              <p className="relative text-xs font-bold text-amber-200">{diceRolling ? "🎲 Kostki się toczą..." : hasDice ? `Wynik: ${gameState.dice_1! + gameState.dice_2!}` : "Czekamy na pierwszy rzut"}</p>
-              <div className="relative rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] text-slate-300">Cel: $5 000</div>
-              <div className="relative flex items-center justify-center gap-3 rounded-lg border border-white/10 bg-black/15 px-2 py-1 text-[9px] text-slate-300">
-                <span>🏠 Domki 1–4</span><span>🏨 Hotel 5</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {players.length > 2 && <div className="grid grid-cols-2 gap-2 px-3 py-3">{players.slice(2, 4).map((p, i) => renderPlayer(p, i + 2))}</div>}
+        <GameBoard players={players} properties={properties} gameState={gameState} animatedPositions={animatedPositions} currentPlayer={currentPlayer} activePosition={activePosition} diceRolling={diceRolling} hasDice={hasDice} />
+        {players.length > 2 && <div className="grid grid-cols-2 gap-2 px-3 py-3">{players.slice(2, 4).map((p, i) => <PlayerCard key={p.player_id} player={p} index={i + 2} gameState={gameState} myId={myId} properties={properties} />)}</div>}
 
         <div className="space-y-2 px-3 pt-3">
           {gameState.last_start_bonus && <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-center"><p className="text-sm font-bold text-emerald-200">💰 Premia za START</p><p className="text-xs text-slate-300">{players.find((p) => p.player_id === gameState.last_start_bonus?.player_id)?.nickname ?? "Gracz"} ukończył okrążenie</p><p className="text-xl font-black text-emerald-300">+${gameState.last_start_bonus.amount}</p></div>}
