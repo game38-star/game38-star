@@ -614,7 +614,7 @@ export function GameBoard({
             }}
           />
 
-       <div className="relative z-10 flex h-full w-full min-h-0 max-w-full flex-col items-center justify-center gap-1 sm:gap-2">
+       <div className="relative z-10 flex h-full w-full min-h-0 max-w-full flex-col items-center justify-center gap-1">
             {diceRolling ? (
               <div
                 className="flex flex-col items-center justify-center gap-2"
@@ -776,22 +776,7 @@ export function GameBoard({
             ) : (
               <>
               
-{/* LOGO */}
-<div className="flex shrink-0 flex-col items-center gap-0 sm:gap-1">
-  <span className="text-[16px] leading-none sm:text-[28px]">
-    🌆
-  </span>
-
-  <h2 className="whitespace-nowrap bg-gradient-to-b from-amber-600 via-amber-700 to-amber-900 bg-clip-text text-[clamp(13px,3.2vw,30px)] font-black leading-tight tracking-[.08em] text-transparent">
-    CITY ROLL
-  </h2>
-
-  <span className="whitespace-nowrap text-[clamp(6px,1.2vw,10px)] font-bold uppercase tracking-[.12em] text-slate-600">
-    Buduj • Inwestuj • Wygrywaj
-  </span>
-</div>
-
-                {/* AKTUALNY GRACZ */}
+{/* AKTUALNY GRACZ */}
                 <div className="flex max-w-full items-center gap-2 rounded-full border border-slate-300 bg-white/85 px-3 py-1">
                   {currentPlayer && (
                     <span
@@ -835,7 +820,7 @@ export function GameBoard({
 
                 {gameState.turn_phase ===
                   "decision" && (
-                  <p className="max-w-full break-words rounded-lg border border-slate-300 bg-white/75 px-3 py-2 text-[clamp(10px,2.5vw,15px)] font-bold text-slate-900">
+                  <p className="max-w-full shrink-0 break-words rounded-lg border border-slate-300 bg-white/90 px-3 py-1 text-[clamp(10px,2.5vw,15px)] font-bold leading-tight text-slate-900">
                     {fields[activePosition]?.name ??
                       "Pole"}
                   </p>
