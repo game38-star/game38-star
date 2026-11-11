@@ -10,8 +10,9 @@ import { playGameSound, setGameSoundsMuted } from "@/src/features/game/gameSound
 import { getCityEconomy } from "@/src/features/game/cityEconomy";
 import { useGameEvents } from "@/src/features/game/useGameEvents";
 import type { GameEvent as DisplayGameEvent, GameEventType } from "@/src/features/game/gameEvents";
+import { useAutoDice } from "@/src/features/game/useAutoDice";
 
-type JailState = { player_id: string; turns_remaining: number };
+type JailState = { player_id: string; turns_remaining: number; bail_locked: boolean };
 type ChanceNotice = { id: number; player_id: string; card_id: number; title: string; description: string; kind: string; value: number; amount?: number; new_position?: number; rent?: number };
 
 type Auction = { id: string; room_id: string; field_id: number; seller_id: string; starting_price: number; highest_bid: number | null; highest_bidder: string | null; ends_at: string; status: string };
@@ -56,6 +57,9 @@ function GameContent() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [jailStates, setJailStates] = useState<JailState[]>([]);
+  const [turnClock, setTurnClock] = useState<{ deadline_at: string; turn_number: number; player_id: string | null } | null>(null);
+  const [turnSeconds, setTurnSeconds] = useState(60);
+
   const [chanceNotice, setChanceNotice] = useState<ChanceNotice | null>(null);
   const lastCardId = useRef<number>(0);
   const cardsInitialized = useRef(false);
@@ -75,6 +79,8 @@ function GameContent() {
     window.localStorage.setItem("city-roll-sounds-muted", next ? "1" : "0");
   };
   const [diceRolling, setDiceRolling] = useState(false);
+  const [manualDiceAnimating, setManualDiceAnimating] = useState(false);
+  const [manualRolledValue, setManualRolledValue] = useState<number | null>(null);
   const [animatedPositions, setAnimatedPositions] = useState<Record<string, number>>({});
 
   const [error, setError] = useState("");
@@ -94,6 +100,7 @@ function GameContent() {
   const [confirmation, setConfirmation] = useState<{ type: "sell"; fieldId: number; price: number } | { type: "bankruptcy" } | null>(null);
 
   const loadGame = useCallback(async () => {
+    
     const [playersResult, stateResult, propertiesResult, roomResult] = await Promise.all([
       supabase.from("room_players").select("player_id, nickname, color, joined_at, is_bankrupt, pawn_id")
         .eq("room_id", roomId).order("joined_at", { ascending: true }).order("player_id", { ascending: true }),
@@ -111,9 +118,47 @@ function GameContent() {
     setRoomStatus(roomResult.data as RoomStatus);
   }, [roomId]);
 
+  const {
+    autoDiceRolling,
+    autoDiceAnimating,
+    autoRolledValue,
+    autoIdleNotice,
+  } = useAutoDice({
+    roomId,
+    enabled: roomStatus?.status === "playing",
+    players,
+    manualRolling: diceRolling,
+    onGameChanged: loadGame,
+  });
+
+  // Licznik tury pobierany z Supabase; odświeżenie strony nie resetuje czasu.
+  const loadTurnClock = useCallback(async () => {
+    const { data, error: clockError } = await supabase.from("city_roll_turn_clock")
+      .select("deadline_at,turn_number,player_id")
+      .eq("room_id", roomId).maybeSingle();
+    if (clockError) throw clockError;
+    setTurnClock(data);
+  }, [roomId]);
+
+  useEffect(() => {
+    void loadTurnClock().catch(() => {});
+    const poll = setInterval(() => { void loadTurnClock().catch(() => {}); }, 1200);
+    return () => clearInterval(poll);
+  }, [loadTurnClock]);
+
+  useEffect(() => {
+    const tick = () => {
+      if (!turnClock) return;
+      setTurnSeconds(Math.max(0, Math.ceil((new Date(turnClock.deadline_at).getTime() - Date.now()) / 1000)));
+    };
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [turnClock]);
+
   const loadCardsAndJail = useCallback(async () => {
     const [jailResult, cardResult] = await Promise.all([
-      supabase.from("city_roll_jail").select("player_id, turns_remaining").eq("room_id", roomId),
+      supabase.from("city_roll_jail").select("player_id, turns_remaining, bail_locked").eq("room_id", roomId),
       supabase.from("city_roll_card_history")
         .select("id, player_id, card_id, result, city_roll_cards(title, description, kind, value)")
         .eq("room_id", roomId).order("id", { ascending: false }).limit(8),
@@ -156,6 +201,10 @@ function GameContent() {
   async function jailAction(action: "pay" | "skip") {
     if (!myId || !gameState || busy || diceRolling || auction || auctionBusy ||
         gameState.current_turn !== myId || gameState.turn_phase !== "roll") return;
+    if (action === "pay" && jailStates.find(j => j.player_id === myId)?.bail_locked) {
+      setError("Po wybraniu odsiadki nie możesz już zapłacić kaucji. Musisz odsiedzieć pozostałe kolejki.");
+      return;
+    }
     setBusy(true); setError("");
     try {
       const rpc = action === "pay" ? "city_roll_pay_jail" : "city_roll_skip_jail_turn";
@@ -414,6 +463,8 @@ function GameContent() {
     setSaleNotice(null);
     setBusy(true);
     setDiceRolling(true);
+    setManualDiceAnimating(true);
+    setManualRolledValue(null);
     setAnimatedPositions((previous) => ({ ...previous, [playerId]: startPosition }));
     setError("");
     try {
@@ -432,11 +483,13 @@ function GameContent() {
       if (!Number.isInteger(first) || first < 1 || first > 6) {
         throw new Error("Nie udało się odczytać wyniku kostek.");
       }
+      setManualRolledValue(first);
       const steps = first;
       const diceLanding = (startPosition + steps) % 28;
       const serverFinal = Number(rolledState.positions?.[playerId] ?? diceLanding);
       // Co najmniej 900 ms animacji rzutu, nawet jeśli baza odpowie błyskawicznie.
       await wait(Math.max(0, 900 - (Date.now() - startedAt)));
+      setManualDiceAnimating(false);
       await loadGame();
       // Trzymaj blokadę decyzji do zakończenia animacji pionka.
       await wait(350);
@@ -485,6 +538,8 @@ function GameContent() {
         return next;
       });
     } finally {
+      setManualDiceAnimating(false);
+      setManualRolledValue(null);
       setDiceRolling(false);
       setBusy(false);
     }
@@ -649,12 +704,7 @@ if (!confirmed) {
       if (rpcError) throw rpcError;
       await loadGame();
     } catch (err) {
-      console.error("CITY ROLL — błąd bankructwa:", err);
-      const message =
-        err && typeof err === "object" && "message" in err
-          ? String(err.message)
-          : "Nie udało się ogłosić bankructwa.";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Nie udało się ogłosić bankructwa.");
     } finally {
       setBusy(false);
     }
@@ -667,7 +717,9 @@ if (!confirmed) {
   const duelAuction = activePlayerCount === 2;
   const gameFinished = roomStatus?.status === "finished";
   const winner = players.find((p) => p.player_id === roomStatus?.winner_id);
-  const myJailTurns = jailStates.find((j) => j.player_id === myId)?.turns_remaining ?? 0;
+  const myJailState = jailStates.find((j) => j.player_id === myId);
+  const myJailTurns = myJailState?.turns_remaining ?? 0;
+  const myBailLocked = myJailState?.bail_locked === true;
   const myTurn = !gameFinished && !!myId && gameState.current_turn === myId && !players.find((p) => p.player_id === myId)?.is_bankrupt;
   const myBalance = myId ? Number(gameState.balances?.[myId] ?? 0) : 0;
   const auctionBlocked = !!auction || auctionBusy || auctionStartFieldId !== null;
@@ -785,7 +837,15 @@ if (!confirmed) {
 
         <div className="grid grid-cols-2 gap-1 px-2 py-1">{players.map((p) => (
           <div key={p.player_id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1 ${p.player_id === gameState.current_turn ? "border-amber-300/60 bg-amber-300/10" : "border-white/10 bg-white/5"}`}>
-            <span className="shrink-0 text-lg">{pawnIcon(p.pawn_id)}</span>
+            <span className="relative grid h-10 w-10 shrink-0 place-items-center" title={roomStatus?.status === "playing" && p.player_id === gameState.current_turn ? `Pozostało ${turnSeconds} sekund na ruch` : undefined}>
+              {roomStatus?.status === "playing" && p.player_id === gameState.current_turn && turnClock?.player_id === p.player_id && turnClock.turn_number === gameState.turn_number && (
+                <svg className="absolute inset-0 h-10 w-10 -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
+                  <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="3" />
+                  <circle cx="20" cy="20" r="17" fill="none" stroke={turnSeconds <= 10 ? "#fb7185" : turnSeconds <= 20 ? "#fbbf24" : "#34d399"} strokeWidth="3" strokeLinecap="round" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - Math.max(0, Math.min(60, turnSeconds)) / 60)} style={{ transition: "stroke-dashoffset 250ms linear, stroke 250ms ease" }} />
+                </svg>
+              )}
+              <span className="relative z-10 text-lg leading-none">{pawnIcon(p.pawn_id)}</span>
+            </span>
             <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold">{p.nickname}{p.player_id === myId ? " (Ty)" : ""}</p>
             <p className="text-[10px] font-extrabold text-emerald-300">Gotówka: ${(gameState.balances?.[p.player_id] ?? 0).toLocaleString("en-US")}</p><p className="text-[10px] font-bold text-amber-200">Majątek: ${(netWorthByPlayer[p.player_id] ?? 0).toLocaleString("en-US")} / $7,000</p><div className="mt-1 h-1 rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.max(0, Math.min(100, ((netWorthByPlayer[p.player_id] ?? 0) / 7000) * 100))}%` }} /></div></div>
             {p.is_bankrupt && <span className="text-[10px] text-rose-300">💀</span>}
@@ -794,7 +854,7 @@ if (!confirmed) {
 
         <div className="relative">
           <div className="mb-2 flex justify-end"><button type="button" onClick={toggleSounds} aria-label={soundsMuted ? "Włącz dźwięki gry" : "Wycisz dźwięki gry"} className="rounded-lg border border-white/20 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">{soundsMuted ? "🔇 Włącz dźwięki" : "🔊 Wycisz dźwięki"}</button></div>
-          <GameBoard players={players} properties={properties} gameState={gameState} animatedPositions={animatedPositions} currentPlayer={currentPlayer} activePosition={activePosition} diceRolling={diceRolling} hasDice={hasDice} onSelectProperty={setSelectedFieldId} gameEvent={boardGameEvent} chanceNotice={chanceNotice ? { playerName: players.find(p => p.player_id === chanceNotice.player_id)?.nickname ?? "Gracz", title: chanceNotice.title, description: chanceNotice.description, kind: chanceNotice.kind, newPositionName: chanceNotice.new_position != null ? fields[chanceNotice.new_position]?.name : undefined } : null} saleNotice={saleNotice ? { playerName: players.find(p => p.player_id === saleNotice.player_id)?.nickname ?? "Gracz", fieldName: fields[saleNotice.field_id]?.name ?? `Pole ${saleNotice.field_id}`, amount: saleNotice.amount, eventType: saleNotice.event_type } : null} />
+          <GameBoard players={players} properties={properties} gameState={gameState} animatedPositions={animatedPositions} currentPlayer={currentPlayer} activePosition={activePosition} diceRolling={diceRolling || autoDiceRolling} diceAnimating={manualDiceAnimating || autoDiceAnimating} rolledValue={autoDiceRolling ? autoRolledValue : manualRolledValue} idleNotice={autoIdleNotice} hasDice={hasDice} onSelectProperty={setSelectedFieldId} gameEvent={boardGameEvent} chanceNotice={chanceNotice ? { playerName: players.find(p => p.player_id === chanceNotice.player_id)?.nickname ?? "Gracz", title: chanceNotice.title, description: chanceNotice.description, kind: chanceNotice.kind, newPositionName: chanceNotice.new_position != null ? fields[chanceNotice.new_position]?.name : undefined } : null} saleNotice={saleNotice ? { playerName: players.find(p => p.player_id === saleNotice.player_id)?.nickname ?? "Gracz", fieldName: fields[saleNotice.field_id]?.name ?? `Pole ${saleNotice.field_id}`, amount: saleNotice.amount, eventType: saleNotice.event_type } : null} />
 
       {/* Obowiązkowa decyzja więzienna. Brak X, timeoutu i zamykania tłem. */}
       {myTurn && myJailTurns > 0 && gameState.turn_phase === "roll" && (
@@ -805,20 +865,26 @@ if (!confirmed) {
             <h2 id="city-roll-jail-title" className="mt-1 text-lg font-black text-rose-200">JESTEŚ W WIĘZIENIU!</h2>
             <p className="mt-3 text-sm text-slate-200">Pozostało kolejek do odsiedzenia:</p>
             <p className="mt-1 text-3xl font-black text-amber-300">{myJailTurns}</p>
-            <p className="mt-2 text-xs text-slate-300">Wybierz: zapłać kaucję i wróć do gry albo strać tę kolejkę. Okno pozostanie otwarte, dopóki nie podejmiesz decyzji.</p>
+            {myBailLocked ? (
+              <p className="mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm font-bold text-amber-200" role="status">
+                🔒 Wybrałeś odsiadkę. Kaucja jest już niedostępna — musisz odsiedzieć pozostałe {myJailTurns} {myJailTurns === 1 ? "kolejkę" : "kolejki"}.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-slate-300">Możesz zapłacić $150 albo wybrać odsiadkę. Uwaga: po pierwszym wybraniu „Strać kolejkę” nie będzie już możliwości zapłaty kaucji w kolejnych turach.</p>
+            )}
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button type="button" disabled={busy || diceRolling || auctionBlocked || myBalance < 150}
+              {!myBailLocked && <button type="button" disabled={busy || diceRolling || auctionBlocked || myBalance < 150}
                 onClick={() => void jailAction("pay")}
                 className="rounded-2xl bg-emerald-400 px-2 py-2 text-xs font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">
                 🔓 Zapłać 150 $<span className="mt-1 block text-xs font-medium">Wychodzisz i możesz rzucać</span>
-              </button>
+              </button>}
               <button type="button" disabled={busy || diceRolling || auctionBlocked}
                 onClick={() => void jailAction("skip")}
                 className="rounded-2xl border border-rose-300/40 bg-rose-500/20 px-2 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">
                 🎲 Strać kolejkę<span className="mt-1 block text-xs font-medium">Pozostanie {Math.max(0, myJailTurns - 1)}</span>
               </button>
             </div>
-            {myBalance < 150 && <p className="mt-3 text-xs text-amber-200">Nie masz 150 $ — musisz odsiedzieć kolejkę.</p>}
+            {!myBailLocked && myBalance < 150 && <p className="mt-3 text-xs text-amber-200">Nie masz 150 $ — musisz odsiedzieć kolejkę.</p>}
             {error && <p role="alert" className="mt-4 rounded-xl bg-rose-500/20 p-3 text-sm text-rose-200">{error}</p>}
           </section>
         </div>
