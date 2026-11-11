@@ -12,6 +12,7 @@ import {
 } from "@/src/features/multiplayer/realtime";
 import { setPlayerReady } from "@/src/features/multiplayer/players";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { pawnOptions, pawnIcon, pawnColor } from "@/src/features/game/config";
 
 type Room = {
   id: string;
@@ -22,14 +23,6 @@ type Room = {
 };
 
 type PlayerWithPawn = RoomPlayer & { pawn_id?: number | null };
-
-const pawnIcons = ["🐶", "🐱", "⚡", "🦊", "🐼", "🐸", "🤖", "👻"];
-const playerAccents: Record<string, string> = {
-  red: "#fb7185",
-  blue: "#60a5fa",
-  green: "#4ade80",
-  yellow: "#facc15",
-};
 
 function RoomContent() {
   const params = useParams();
@@ -115,7 +108,12 @@ function RoomContent() {
   const me = players.find((player) => player.player_id === userId);
   const isHost = room?.host_id === userId;
   const readyCount = players.filter((player) => player.is_ready).length;
-  const canStart = players.length >= 2 && players.every((player) => player.is_ready);
+  const selectedPawns = players.map((player) => player.pawn_id);
+  const pawnsValid = selectedPawns.every(
+    (pawn) => typeof pawn === "number" && pawnOptions.some((option) => option.id === pawn)
+  );
+  const pawnsUnique = new Set(selectedPawns).size === selectedPawns.length;
+  const canStart = players.length >= 2 && players.every((player) => player.is_ready) && pawnsValid && pawnsUnique;
 
   async function handleReady() {
     if (!room || !me) return;
@@ -223,18 +221,20 @@ function RoomContent() {
           <div className="space-y-2">
             {players.map((player) => {
               const pawn = player.pawn_id;
-              const icon = typeof pawn === "number" && pawn >= 0 && pawn < pawnIcons.length ? pawnIcons[pawn] : "🎩";
+              const icon = typeof pawn === "number" && pawnOptions.some((option) => option.id === pawn) ? pawnIcon(pawn) : "❔";
+              const color = pawnColor(pawn);
+              const pawnName = pawnOptions.find((option) => option.id === pawn)?.name ?? "Nie wybrano pionka";
               const isMe = player.player_id === userId;
               const host = player.player_id === room.host_id;
               return (
                 <div key={player.id} className={`flex items-center gap-2 rounded-xl border px-2.5 py-2.5 sm:gap-3 sm:px-3 sm:py-3 ${isMe ? "border-amber-300/35 bg-[#293348]" : "border-white/5 bg-[#0f1a2b]"}`}>
-                  <div className="relative flex h-10 w-10 shrink-0 sm:h-11 sm:w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-2xl">
+                  <div className="relative flex h-10 w-10 shrink-0 sm:h-11 sm:w-11 items-center justify-center rounded-xl border-2 bg-[#0c1829] text-2xl" style={{ borderColor: color, boxShadow: `0 0 0 2px ${color}22` }}>
                     {icon}
-                    <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#172235]" style={{ backgroundColor: playerAccents[player.color] ?? "#cbd5e1" }} />
+                    <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#172235]" style={{ backgroundColor: color }} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{player.nickname} {host && <span title="Gospodarz">👑</span>} {isMe && <span className="text-xs font-normal text-amber-200">(Ty)</span>}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-400">{host ? "Gospodarz pokoju" : "Gracz"}</p>
+                    <p className="mt-0.5 text-[10px] text-slate-400">{pawnName} · {host ? "Gospodarz pokoju" : "Gracz"}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black sm:px-2.5 sm:text-[10px] ${player.is_ready ? "bg-emerald-400/15 text-emerald-300" : "bg-white/10 text-slate-300"}`}>
                     {player.is_ready ? "✓ GOTOWY" : "⏳ CZEKA"}
@@ -262,7 +262,7 @@ function RoomContent() {
               <button onClick={handleStart} disabled={busy || !canStart} className="min-h-12 w-full rounded-xl bg-gradient-to-r from-amber-300 to-yellow-500 px-4 py-3 sm:py-4 text-sm font-black text-[#172033] shadow-[0_6px_20px_rgba(245,158,11,0.2)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
                 🎲 ROZPOCZNIJ GRĘ
               </button>
-              {!canStart && <p className="text-center text-[11px] text-slate-400">Do rozpoczęcia potrzeba minimum 2 graczy i gotowości wszystkich.</p>}
+              {!canStart && <p className="text-center text-[11px] text-slate-400">{!pawnsValid ? "Każdy gracz musi wybrać jedną z 4 figurek." : !pawnsUnique ? "Dwóch graczy ma tę samą figurkę — wybierzcie różne." : "Do rozpoczęcia potrzeba minimum 2 graczy i gotowości wszystkich."}</p>}
             </>
           )}
 
