@@ -614,7 +614,7 @@ export function GameBoard({
             }}
           />
 
-          <div className="relative z-10 flex w-full max-w-full flex-col items-center justify-center gap-2">
+       <div className="relative z-10 flex h-full w-full min-h-0 max-w-full flex-col items-center justify-center gap-1 sm:gap-2">
             {diceRolling ? (
               <div
                 className="flex flex-col items-center justify-center gap-2"
@@ -775,20 +775,21 @@ export function GameBoard({
               </div>
             ) : (
               <>
-                {/* LOGO */}
-                <div className="mb-1 flex flex-col items-center gap-1">
-                  <span className="text-[clamp(16px,4vw,35px)] leading-none">
-                    🌆
-                  </span>
+              
+{/* LOGO */}
+<div className="flex shrink-0 flex-col items-center gap-0 sm:gap-1">
+  <span className="text-[16px] leading-none sm:text-[28px]">
+    🌆
+  </span>
 
-                  <h2 className="bg-gradient-to-b from-amber-600 via-amber-700 to-amber-900 bg-clip-text text-[clamp(15px,4vw,34px)] font-black tracking-[.12em] text-transparent drop-shadow-sm">
-                    CITY ROLL
-                  </h2>
+  <h2 className="whitespace-nowrap bg-gradient-to-b from-amber-600 via-amber-700 to-amber-900 bg-clip-text text-[clamp(13px,3.2vw,30px)] font-black leading-tight tracking-[.08em] text-transparent">
+    CITY ROLL
+  </h2>
 
-                  <span className="text-[clamp(7px,1.5vw,10px)] font-bold uppercase tracking-[.25em] text-slate-600">
-                    Buduj • Inwestuj • Wygrywaj
-                  </span>
-                </div>
+  <span className="whitespace-nowrap text-[clamp(6px,1.2vw,10px)] font-bold uppercase tracking-[.12em] text-slate-600">
+    Buduj • Inwestuj • Wygrywaj
+  </span>
+</div>
 
                 {/* AKTUALNY GRACZ */}
                 <div className="flex max-w-full items-center gap-2 rounded-full border border-slate-300 bg-white/85 px-3 py-1">
@@ -816,7 +817,13 @@ export function GameBoard({
                 </p>
 
                 {/* KOSTKA */}
-                <DiceFace value={gameState.dice_1} />
+              
+<div className="flex h-[100px] w-[136px] shrink-0 items-center justify-center sm:h-[136px]">
+  <div className="origin-center scale-[0.72] sm:scale-100">
+    <DiceFace value={gameState.dice_1} />
+  </div>
+</div>
+
 
                 <p className="text-[clamp(12px,3vw,20px)] font-black text-amber-800">
                   {hasDice
