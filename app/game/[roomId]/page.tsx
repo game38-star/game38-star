@@ -6,6 +6,8 @@ import { supabase } from "@/src/lib/supabase/client";
 import type { Player, Property, GameState, RoomStatus } from "@/src/features/game/types";
 import { fields, cityPrices, specialIds, pawnIcon } from "@/src/features/game/config";
 import { GameBoard } from "@/src/features/game/components/GameBoard";
+import { GameLayout, GameFrame } from "@/src/features/game/components/GameLayout";
+import { getPlayerColor, getPlayerFieldColor } from "@/src/features/game/gameTheme";
 import { playGameSound, setGameSoundsMuted } from "@/src/features/game/gameSounds";
 import { getCityEconomy } from "@/src/features/game/cityEconomy";
 import { useGameEvents } from "@/src/features/game/useGameEvents";
@@ -710,8 +712,8 @@ if (!confirmed) {
     }
   }
 
-  if (loading) return <main className="flex min-h-screen items-center justify-center bg-[#090e1a] text-slate-200">Ładowanie CITY ROLL...</main>;
-  if (!gameState) return <main className="min-h-screen bg-[#090e1a] p-8 text-center text-white">Nie udało się wczytać gry.<p className="mt-3 text-rose-400">{error}</p></main>;
+  if (loading) return <main className="flex min-h-screen items-center justify-center bg-white text-slate-900">Ładowanie CITY ROLL...</main>;
+  if (!gameState) return <main className="min-h-screen bg-white p-8 text-center text-slate-900">Nie udało się wczytać gry.<p className="mt-3 text-rose-400">{error}</p></main>;
 
   const activePlayerCount = players.filter((p) => !p.is_bankrupt).length;
   const duelAuction = activePlayerCount === 2;
@@ -804,9 +806,9 @@ if (!confirmed) {
 
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(ellipse_at_top,#1e3050_0%,#0b1220_52%,#080d17_100%)] text-white">
+    <GameLayout>
       <style>{`@keyframes bankrollDiceSpin { 0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); } 100% { transform: rotateX(1080deg) rotateY(1440deg) rotateZ(360deg); } } .bankroll-dice-spin { animation: bankrollDiceSpin 850ms linear infinite; } @keyframes bankrollPawnHop { 0% { transform: translateY(3px) scale(.9) rotate(-8deg); } 45% { transform: translateY(-8px) scale(1.14) rotate(5deg); } 100% { transform: translateY(0) scale(1); } } .bankroll-pawn-hop { animation: bankrollPawnHop 290ms ease-out; }`}</style>
-      <div className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col border-x border-white/5 bg-[#0d1626]/80 pb-4 shadow-2xl">
+      <GameFrame>
         <header className="flex h-9 shrink-0 items-center justify-between border-b border-white/10 px-3">
           <div className="flex min-w-0 items-baseline gap-2">
             <h1 className="text-sm font-black leading-none tracking-tight">CITY <span className="text-amber-300">ROLL</span></h1>
@@ -836,7 +838,7 @@ if (!confirmed) {
         )}
 
         <div className="grid grid-cols-2 gap-1 px-2 py-1">{players.map((p) => (
-          <div key={p.player_id} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1 ${p.player_id === gameState.current_turn ? "border-amber-300/60 bg-amber-300/10" : "border-white/10 bg-white/5"}`}>
+          <div key={p.player_id} className="flex min-w-0 items-center gap-2 rounded-lg border-2 px-2 py-1 shadow-sm" style={{ borderColor: getPlayerColor(p.player_id, players.map(player => player.player_id)), background: getPlayerFieldColor(p.player_id, players.map(player => player.player_id)) }}>
             <span className="relative grid h-10 w-10 shrink-0 place-items-center" title={roomStatus?.status === "playing" && p.player_id === gameState.current_turn ? `Pozostało ${turnSeconds} sekund na ruch` : undefined}>
               {roomStatus?.status === "playing" && p.player_id === gameState.current_turn && turnClock?.player_id === p.player_id && turnClock.turn_number === gameState.turn_number && (
                 <svg className="absolute inset-0 h-10 w-10 -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
@@ -844,10 +846,10 @@ if (!confirmed) {
                   <circle cx="20" cy="20" r="17" fill="none" stroke={turnSeconds <= 10 ? "#fb7185" : turnSeconds <= 20 ? "#fbbf24" : "#34d399"} strokeWidth="3" strokeLinecap="round" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - Math.max(0, Math.min(60, turnSeconds)) / 60)} style={{ transition: "stroke-dashoffset 250ms linear, stroke 250ms ease" }} />
                 </svg>
               )}
-              <span className="relative z-10 text-lg leading-none">{pawnIcon(p.pawn_id)}</span>
+              <span className="relative z-10 grid h-8 w-8 place-items-center rounded-full border-2 border-white text-lg leading-none shadow-sm" style={{ backgroundColor: getPlayerColor(p.player_id, players.map(player => player.player_id)) }}>{pawnIcon(p.pawn_id)}</span>
             </span>
-            <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-bold">{p.nickname}{p.player_id === myId ? " (Ty)" : ""}</p>
-            <p className="text-[10px] font-extrabold text-emerald-300">Gotówka: ${(gameState.balances?.[p.player_id] ?? 0).toLocaleString("en-US")}</p><p className="text-[10px] font-bold text-amber-200">Majątek: ${(netWorthByPlayer[p.player_id] ?? 0).toLocaleString("en-US")} / $7,000</p><div className="mt-1 h-1 rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.max(0, Math.min(100, ((netWorthByPlayer[p.player_id] ?? 0) / 7000) * 100))}%` }} /></div></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-black text-slate-950"><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ backgroundColor: getPlayerColor(p.player_id, players.map(player => player.player_id)) }} />{p.nickname}{p.player_id === myId ? " (Ty)" : ""}</p>
+            <p className="text-[10px] font-extrabold text-emerald-800">Gotówka: ${(gameState.balances?.[p.player_id] ?? 0).toLocaleString("en-US")}</p><p className="text-[10px] font-bold text-slate-800">Majątek: ${(netWorthByPlayer[p.player_id] ?? 0).toLocaleString("en-US")} / $7,000</p><div className="mt-1 h-1 rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.max(0, Math.min(100, ((netWorthByPlayer[p.player_id] ?? 0) / 7000) * 100))}%` }} /></div></div>
             {p.is_bankrupt && <span className="text-[10px] text-rose-300">💀</span>}
           </div>
         ))}</div>
@@ -1126,11 +1128,11 @@ if (!confirmed) {
             </div>
           </div>
         </section>
-      </div>
-    </main>
+      </GameFrame>
+    </GameLayout>
   );
 }
 
 export default function GamePage() {
-  return <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-[#090e1a] text-white">Ładowanie planszy...</main>}><GameContent /></Suspense>;
+  return <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-white text-slate-900">Ładowanie planszy...</main>}><GameContent /></Suspense>;
 }

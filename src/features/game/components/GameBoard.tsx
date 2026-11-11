@@ -2,10 +2,11 @@
 "use client";
 
 import type { Player, Property, GameState } from "../types";
-import { fields, getPosition, pawnIcon, pawnColor } from "../config";
+import { fields, getPosition, pawnIcon } from "../config";
 import { GameEventNotice } from "./GameEventNotice";
 import { getCityRent } from "../cityEconomy";
 import type { GameEvent } from "../gameEvents";
+import { getPlayerColor, getPlayerFieldColor } from "../gameTheme";
 
 // ==========================================
 // KOSTKA 3D — ZACHOWANA MECHANIKA
@@ -146,20 +147,20 @@ function getFieldIcon(
   return "🏙️";
 }
 
-function fieldBackground(
-  isSpecial: boolean,
-  owned: boolean
-) {
-  if (isSpecial) {
-    return "linear-gradient(145deg,#243e5c,#111e32)";
-  }
-
-  if (owned) {
-    return "linear-gradient(145deg,#263c57,#142238)";
-  }
-
-  return "linear-gradient(145deg,#24465b,#172e42)";
+// Wspólna paleta z panelami graczy (gameTheme.ts).
+function playerVisualColor(playerId: string | undefined, players: Player[]) {
+  return getPlayerColor(playerId, players.map((player) => player.player_id));
 }
+
+function playerFieldColor(playerId: string | undefined, players: Player[]) {
+  return getPlayerFieldColor(playerId, players.map((player) => player.player_id));
+}
+
+function fieldBackground(isSpecial: boolean, ownerColor?: string) {
+  if (isSpecial) return "#FFFFFF";
+  return ownerColor ?? "#FFFFFF";
+}
+
 
 type SaleNotice = {
   playerName: string;
@@ -362,7 +363,7 @@ export function GameBoard({
           gridTemplateRows:
             "1.28fr repeat(6, minmax(0,1fr)) 1.28fr",
         }}
-        className="relative grid aspect-square w-full max-w-[min(100%,calc(100dvh-205px))] gap-[2px] overflow-hidden rounded-2xl border-2 border-[#63849c]/50 bg-[#07111e] p-[3px] shadow-[0_20px_65px_rgba(0,0,0,.55),inset_0_0_25px_rgba(58,113,157,.12)]"
+        className="relative grid aspect-square w-full max-w-[min(100%,calc(100dvh-205px))] gap-[2px] overflow-hidden rounded-2xl border-2 border-[#b8c8d8] bg-white p-[3px] shadow-[0_20px_65px_rgba(0,0,0,.55),inset_0_0_25px_rgba(58,113,157,.12)]"
       >
         {/* POLA DOOKOŁA PLANSZY */}
         {fields.map((field) => {
@@ -455,13 +456,13 @@ export function GameBoard({
                 gridColumn: pos.col,
                 background: fieldBackground(
                   isSpecial,
-                  !!owner
+                  owner ? playerFieldColor(owner.owner_id, players) : undefined
                 ),
                 borderColor: isActive
                   ? "#fbbf24"
                   : owner
-                    ? pawnColor(ownerPlayer?.pawn_id)
-                    : "#64809a",
+                    ? playerVisualColor(owner.owner_id, players)
+                    : "#a6b5c7",
               }}
               className={`group relative flex min-h-0 min-w-0 flex-col items-center overflow-hidden rounded-[6px] border text-center transition-[filter,box-shadow] duration-200 ${
                 canPreview
@@ -481,13 +482,13 @@ export function GameBoard({
               />
 
               {/* NUMER POLA */}
-              <span className="absolute left-[2px] top-[8px] z-10 text-[clamp(5px,1vw,7px)] font-bold text-white/45">
+              <span className="absolute left-[2px] top-[8px] z-10 text-[clamp(5px,1vw,7px)] font-bold text-slate-700/70">
                 {field.id}
               </span>
 
               {/* NAZWA */}
               <div className="absolute inset-x-[2px] top-[15%] z-10 flex h-[27%] items-start justify-center overflow-hidden">
-                <span className="break-words text-[clamp(6px,1.35vw,10px)] font-black leading-[1.05] tracking-tight text-white drop-shadow-[0_1px_2px_#000]">
+                <span className="rounded-[3px] bg-white/70 px-[2px] break-words text-[clamp(6px,1.35vw,10px)] font-black leading-[1.05] tracking-tight text-[#111827]">
                   {field.name}
                 </span>
               </div>
@@ -503,15 +504,15 @@ export function GameBoard({
                   </span>
                 ) : (
                   <>
-                    <span className="text-[clamp(10px,2.1vw,17px)] leading-none opacity-90">
+                    <span className="text-[clamp(10px,2.1vw,17px)] leading-none opacity-90 drop-shadow-[0_2px_3px_#000]">
                       {isUtility ? icon : "🏙️"}
                     </span>
 
                     <span
                       className={`max-w-full whitespace-nowrap rounded-[4px] border px-[3px] py-[2px] text-[clamp(7px,1.4vw,10px)] font-black leading-none shadow-sm ${
                         owner
-                          ? "border-amber-300/40 bg-[#493c20] text-amber-100"
-                          : "border-emerald-300/30 bg-[#123b34] text-emerald-100"
+                          ? "border-slate-800/20 bg-white/85 text-slate-950"
+                          : "border-slate-400/40 bg-[#e6f5eb] text-slate-900"
                       }`}
                     >
                       {owner
@@ -558,11 +559,11 @@ export function GameBoard({
                         }`}
                         title={`Gracz: ${player.nickname}`}
                         style={{
-                          borderColor: pawnColor(player.pawn_id),
-                          boxShadow:
-                            "0 0 0 1px #fff9,0 3px 8px #000a",
+                          backgroundColor: playerVisualColor(player.player_id, players),
+                          borderColor: "#ffffff",
+                          boxShadow: `0 0 0 2px #07111e, 0 0 11px ${playerVisualColor(player.player_id, players)}, 0 3px 9px #000c`,
                         }}
-                        className={`inline-flex h-[clamp(17px,3.5vw,26px)] w-[clamp(17px,3.5vw,26px)] shrink-0 items-center justify-center rounded-full border-[2px] bg-[#08111f] text-[clamp(11px,2.2vw,17px)] leading-none ${
+                        className={`inline-flex h-[clamp(17px,3.5vw,26px)] w-[clamp(17px,3.5vw,26px)] shrink-0 items-center justify-center rounded-full border-[2px] text-[clamp(11px,2.2vw,17px)] leading-none ${
                           moving ? "city-roll-pawn-hop" : ""
                         }`}
                       >
@@ -576,11 +577,9 @@ export function GameBoard({
               {/* WŁAŚCICIEL POLA */}
               {ownerPlayer && (
                 <span
-                  className="absolute bottom-[2px] left-[2px] z-20 flex h-[clamp(13px,2.5vw,19px)] min-w-[clamp(13px,2.5vw,19px)] items-center justify-center rounded-[4px] border-[2px] bg-[#0a1628] px-[2px] text-[clamp(9px,1.8vw,13px)] leading-none"
+                  className="absolute bottom-[2px] left-[2px] z-20 flex h-[clamp(13px,2.5vw,19px)] min-w-[clamp(13px,2.5vw,19px)] items-center justify-center rounded-[4px] border-[2px] bg-white px-[2px] text-[clamp(9px,1.8vw,13px)] leading-none"
                   style={{
-                    borderColor: pawnColor(
-                      ownerPlayer.pawn_id
-                    ),
+                    borderColor: playerVisualColor(ownerPlayer.player_id, players),
                   }}
                   title={`Właściciel: ${ownerPlayer.nickname}`}
                 >
@@ -597,7 +596,7 @@ export function GameBoard({
             gridRow: "2 / 8",
             gridColumn: "2 / 8",
           }}
-          className="relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-[#547a98]/40 bg-[radial-gradient(ellipse_at_50%_30%,#284b69_0%,#152a43_48%,#0b182a_100%)] p-2 text-center shadow-[inset_0_0_45px_#02081770]"
+          className="relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-[#c4d0dd] bg-white p-2 text-center shadow-[inset_0_0_35px_#a8bdd333]"
         >
           {/* OZDOBNE NAROŻNIKI */}
           <span className="pointer-events-none absolute left-3 top-3 h-6 w-6 border-l-2 border-t-2 border-amber-400/40" />
@@ -610,7 +609,7 @@ export function GameBoard({
             className="pointer-events-none absolute inset-0 opacity-[.07]"
             style={{
               backgroundImage:
-                "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)",
+                "linear-gradient(#94a3b8 1px,transparent 1px),linear-gradient(90deg,#94a3b8 1px,transparent 1px)",
               backgroundSize: "22px 22px",
             }}
           />
@@ -622,7 +621,7 @@ export function GameBoard({
                 role="status"
                 aria-live="polite"
               >
-                <p className="text-[11px] font-black uppercase tracking-[.2em] text-amber-200">
+                <p className="text-[11px] font-black uppercase tracking-[.2em] text-amber-800">
                   {diceAnimating
                     ? "🎲 Losowanie"
                     : "🎲 Wylosowano"}
@@ -635,7 +634,7 @@ export function GameBoard({
                   rolling={diceAnimating}
                 />
 
-                <p className="text-xs font-bold text-slate-200">
+                <p className="text-xs font-bold text-slate-700">
                   {diceAnimating
                     ? "Kostka się kręci..."
                     : "Pionek rusza za chwilę!"}
@@ -655,7 +654,7 @@ export function GameBoard({
                       : "🎲"}
                 </span>
 
-                <p className="text-lg font-black text-white">
+                <p className="text-lg font-black text-slate-900">
                   {idleNotice.kind === "eliminated"
                     ? "Gracz wyrzucony z gry!"
                     : idleNotice.kind === "warning"
@@ -663,11 +662,11 @@ export function GameBoard({
                       : "Automatyczny rzut"}
                 </p>
 
-                <p className="text-sm text-slate-200">
+                <p className="text-sm text-slate-700">
                   {idleNotice.playerName}
                 </p>
 
-                <p className="text-xs font-semibold text-amber-200">
+                <p className="text-xs font-semibold text-amber-800">
                   {idleNotice.kind === "eliminated"
                     ? "Trzecia nieaktywna tura z rzędu — eliminacja."
                     : idleNotice.kind === "warning"
@@ -691,24 +690,24 @@ export function GameBoard({
                     : "🎴"}
                 </span>
 
-                <p className="text-xs font-black uppercase tracking-widest text-violet-300">
+                <p className="text-xs font-black uppercase tracking-widest text-violet-800">
                   Karta losowa
                 </p>
 
-                <p className="text-xs font-semibold text-slate-200">
+                <p className="text-xs font-semibold text-slate-700">
                   {chanceNotice.playerName}
                 </p>
 
-                <p className="text-lg font-black text-white">
+                <p className="text-lg font-black text-slate-900">
                   {chanceNotice.title}
                 </p>
 
-                <p className="text-xs text-slate-200">
+                <p className="text-xs text-slate-700">
                   {chanceNotice.description}
                 </p>
 
                 {chanceNotice.newPositionName && (
-                  <p className="text-[10px] text-amber-200">
+                  <p className="text-[10px] text-amber-800">
                     Pole: {chanceNotice.newPositionName}
                   </p>
                 )}
@@ -721,20 +720,20 @@ export function GameBoard({
               >
                 <span className="text-4xl">🏠</span>
 
-                <p className="text-xs font-black uppercase tracking-widest text-emerald-300">
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-800">
                   Własna nieruchomość
                 </p>
 
-                <p className="text-lg font-black text-white">
+                <p className="text-lg font-black text-slate-900">
                   {ownFieldNotice.fieldName}
                 </p>
 
-                <p className="text-xs text-slate-200">
+                <p className="text-xs text-slate-700">
                   {ownFieldNotice.playerName} stanął na
                   swoim polu!
                 </p>
 
-                <p className="text-xs font-semibold text-emerald-200">
+                <p className="text-xs font-semibold text-emerald-800">
                   Bez opłaty za czynsz
                 </p>
               </div>
@@ -750,24 +749,24 @@ export function GameBoard({
                   {isBuildingSale ? "🏗️" : "🏙️"}
                 </span>
 
-                <p className="text-xs font-black uppercase tracking-widest text-emerald-300">
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-800">
                   {isBuildingSale
                     ? "Sprzedaż budynku"
                     : "Sprzedaż miasta"}
                 </p>
 
-                <p className="text-xl font-black text-white">
+                <p className="text-xl font-black text-slate-900">
                   {saleNotice.fieldName}
                 </p>
 
-                <p className="text-xs text-slate-200">
+                <p className="text-xs text-slate-700">
                   {saleNotice.playerName}{" "}
                   {isBuildingSale
                     ? "sprzedał(a) budynek"
                     : "sprzedał(a) nieruchomość"}
                 </p>
 
-                <p className="text-2xl font-black text-emerald-300">
+                <p className="text-2xl font-black text-emerald-800">
                   +$
                   {saleNotice.amount.toLocaleString(
                     "en-US"
@@ -782,37 +781,35 @@ export function GameBoard({
                     🌆
                   </span>
 
-                  <h2 className="bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-[clamp(15px,4vw,34px)] font-black tracking-[.12em] text-transparent drop-shadow-sm">
+                  <h2 className="bg-gradient-to-b from-amber-600 via-amber-700 to-amber-900 bg-clip-text text-[clamp(15px,4vw,34px)] font-black tracking-[.12em] text-transparent drop-shadow-sm">
                     CITY ROLL
                   </h2>
 
-                  <span className="text-[clamp(7px,1.5vw,10px)] font-bold uppercase tracking-[.25em] text-slate-400">
+                  <span className="text-[clamp(7px,1.5vw,10px)] font-bold uppercase tracking-[.25em] text-slate-600">
                     Buduj • Inwestuj • Wygrywaj
                   </span>
                 </div>
 
                 {/* AKTUALNY GRACZ */}
-                <div className="flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#071322]/60 px-3 py-1">
+                <div className="flex max-w-full items-center gap-2 rounded-full border border-slate-300 bg-white/85 px-3 py-1">
                   {currentPlayer && (
                     <span
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 bg-[#101b2d] text-lg"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 bg-white text-lg"
                       style={{
-                        borderColor: pawnColor(
-                          currentPlayer.pawn_id
-                        ),
+                        borderColor: playerVisualColor(currentPlayer.player_id, players),
                       }}
                     >
                       {pawnIcon(currentPlayer.pawn_id)}
                     </span>
                   )}
 
-                  <span className="max-w-[170px] truncate text-[clamp(9px,2vw,13px)] font-bold text-white">
+                  <span className="max-w-[170px] truncate text-[clamp(9px,2vw,13px)] font-bold text-slate-900">
                     {currentPlayer?.nickname ??
                       "Oczekiwanie"}
                   </span>
                 </div>
 
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
                   {gameState.turn_phase === "roll"
                     ? "Rzut kostką"
                     : "Podejmowanie decyzji"}
@@ -821,7 +818,7 @@ export function GameBoard({
                 {/* KOSTKA */}
                 <DiceFace value={gameState.dice_1} />
 
-                <p className="text-[clamp(12px,3vw,20px)] font-black text-amber-200">
+                <p className="text-[clamp(12px,3vw,20px)] font-black text-amber-800">
                   {hasDice
                     ? gameState.dice_1 === 6
                       ? "Dodatkowy rzut!"
@@ -831,7 +828,7 @@ export function GameBoard({
 
                 {gameState.turn_phase ===
                   "decision" && (
-                  <p className="max-w-full break-words rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[clamp(10px,2.5vw,15px)] font-bold text-white">
+                  <p className="max-w-full break-words rounded-lg border border-slate-300 bg-white/75 px-3 py-2 text-[clamp(10px,2.5vw,15px)] font-bold text-slate-900">
                     {fields[activePosition]?.name ??
                       "Pole"}
                   </p>
