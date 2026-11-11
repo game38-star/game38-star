@@ -359,9 +359,9 @@ export function GameBoard({
       <div
         style={{
           gridTemplateColumns:
-            "1.28fr repeat(6, minmax(0,1fr)) 1.28fr",
+            "1.42fr repeat(6, minmax(0,1fr)) 1.42fr",
           gridTemplateRows:
-            "1.28fr repeat(6, minmax(0,1fr)) 1.28fr",
+            "1.42fr repeat(6, minmax(0,1fr)) 1.42fr",
         }}
         className="relative grid aspect-square w-full max-w-[min(100%,calc(100dvh-205px))] gap-[2px] overflow-hidden rounded-2xl border-2 border-[#b8c8d8] bg-white p-[3px] shadow-[0_20px_65px_rgba(0,0,0,.55),inset_0_0_25px_rgba(58,113,157,.12)]"
       >
@@ -472,54 +472,31 @@ export function GameBoard({
                 isActive ? "city-roll-active-tile z-10" : ""
               }`}
             >
-              {/* KOLOR GRUPY NIERUCHOMOŚCI */}
-              <div
-                className="absolute inset-x-0 top-0 h-[7px] border-b border-black/20"
-                style={{
-                  background: tileEdge,
-                  boxShadow: `0 2px 8px ${tileEdge}55`,
-                }}
-              />
+              {/* PASEK KOLORU GRUPY */}
+              <div className="absolute inset-x-0 top-0 h-[5px] border-b border-black/10"
+                style={{ background: tileEdge }} />
 
-              {/* NUMER POLA */}
-              <span className="absolute left-[2px] top-[8px] z-10 text-[clamp(5px,1vw,7px)] font-bold text-slate-700/70">
-                {field.id}
-              </span>
-
-              {/* NAZWA */}
-              <div className="absolute inset-x-[2px] top-[15%] z-10 flex h-[27%] items-start justify-center overflow-hidden">
-                <span className="rounded-[3px] bg-white/70 px-[2px] break-words text-[clamp(6px,1.35vw,10px)] font-black leading-[1.05] tracking-tight text-[#111827]">
+              {/* NAZWA: osobny obszar, bez ucinania tekstu */}
+              <div className="absolute inset-x-[1px] top-[7px] bottom-[48%] z-10 flex items-start justify-center px-[1px]">
+                <span
+                  className="block w-full text-center text-[clamp(7px,2vw,11px)] font-black leading-[1.05] text-slate-950 [overflow-wrap:anywhere]"
+                  style={{ textWrap: "balance" }}
+                >
                   {field.name}
                 </span>
               </div>
 
-              {/* IKONA POLA / CENA */}
-              <div className="absolute inset-x-[2px] top-[42%] flex h-[30%] flex-col items-center justify-center gap-[1px]">
-                {isSpecial ? (
-                  <span
-                    aria-hidden="true"
-                    className="text-[clamp(13px,3vw,27px)] leading-none drop-shadow-[0_2px_5px_#0008]"
-                  >
-                    {icon}
+              {/* IKONA I CENA: osobna dolna strefa */}
+              <div className="absolute inset-x-[1px] top-[52%] bottom-[3px] flex flex-col items-center justify-center gap-[2px]">
+                <span aria-hidden="true" className="text-[clamp(12px,2.8vw,19px)] leading-none">
+                  {isSpecial ? icon : isUtility ? icon : "🏙️"}
+                </span>
+                {!isSpecial && (
+                  <span className={`max-w-full rounded-[4px] border px-[2px] py-[1px] text-[clamp(8px,1.8vw,11px)] font-black leading-none shadow-sm ${
+                    owner ? "border-slate-800/20 bg-white/90 text-slate-950" : "border-slate-400/40 bg-[#e6f5eb] text-slate-900"
+                  }`}>
+                    ${owner ? currentRent ?? "?" : field.price}
                   </span>
-                ) : (
-                  <>
-                    <span className="text-[clamp(10px,2.1vw,17px)] leading-none opacity-90 drop-shadow-[0_2px_3px_#000]">
-                      {isUtility ? icon : "🏙️"}
-                    </span>
-
-                    <span
-                      className={`max-w-full whitespace-nowrap rounded-[4px] border px-[3px] py-[2px] text-[clamp(7px,1.4vw,10px)] font-black leading-none shadow-sm ${
-                        owner
-                          ? "border-slate-800/20 bg-white/85 text-slate-950"
-                          : "border-slate-400/40 bg-[#e6f5eb] text-slate-900"
-                      }`}
-                    >
-                      {owner
-                        ? `$${currentRent ?? "?"}`
-                        : `$${field.price}`}
-                    </span>
-                  </>
                 )}
               </div>
 
