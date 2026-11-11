@@ -6,6 +6,7 @@ import { supabase } from "@/src/lib/supabase/client";
 import type { Player, Property, GameState, RoomStatus } from "@/src/features/game/types";
 import { fields, cityPrices, specialIds, pawnIcon } from "@/src/features/game/config";
 import { GameBoard } from "@/src/features/game/components/GameBoard";
+import { PlayerBar } from "@/src/features/game/components/PlayerBar";
 import { GameLayout, GameFrame } from "@/src/features/game/components/GameLayout";
 import { getPlayerColor, getPlayerFieldColor } from "@/src/features/game/gameTheme";
 import { playGameSound, setGameSoundsMuted } from "@/src/features/game/gameSounds";
@@ -837,22 +838,13 @@ if (!confirmed) {
           </section>
         )}
 
-        <div className="grid grid-cols-2 gap-1 px-2 py-1">{players.map((p) => (
-          <div key={p.player_id} className="flex min-w-0 items-center gap-2 rounded-lg border-2 px-2 py-1 shadow-sm" style={{ borderColor: getPlayerColor(p.player_id, players.map(player => player.player_id)), background: getPlayerFieldColor(p.player_id, players.map(player => player.player_id)) }}>
-            <span className="relative grid h-10 w-10 shrink-0 place-items-center" title={roomStatus?.status === "playing" && p.player_id === gameState.current_turn ? `Pozostało ${turnSeconds} sekund na ruch` : undefined}>
-              {roomStatus?.status === "playing" && p.player_id === gameState.current_turn && turnClock?.player_id === p.player_id && turnClock.turn_number === gameState.turn_number && (
-                <svg className="absolute inset-0 h-10 w-10 -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
-                  <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="3" />
-                  <circle cx="20" cy="20" r="17" fill="none" stroke={turnSeconds <= 10 ? "#fb7185" : turnSeconds <= 20 ? "#fbbf24" : "#34d399"} strokeWidth="3" strokeLinecap="round" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - Math.max(0, Math.min(60, turnSeconds)) / 60)} style={{ transition: "stroke-dashoffset 250ms linear, stroke 250ms ease" }} />
-                </svg>
-              )}
-              <span className="relative z-10 grid h-8 w-8 place-items-center rounded-full border-2 border-white text-lg leading-none shadow-sm" style={{ backgroundColor: getPlayerColor(p.player_id, players.map(player => player.player_id)) }}>{pawnIcon(p.pawn_id)}</span>
-            </span>
-            <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-black text-slate-950"><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ backgroundColor: getPlayerColor(p.player_id, players.map(player => player.player_id)) }} />{p.nickname}{p.player_id === myId ? " (Ty)" : ""}</p>
-            <p className="text-[10px] font-extrabold text-emerald-800">Gotówka: ${(gameState.balances?.[p.player_id] ?? 0).toLocaleString("en-US")}</p><p className="text-[10px] font-bold text-slate-800">Majątek: ${(netWorthByPlayer[p.player_id] ?? 0).toLocaleString("en-US")} / $7,000</p><div className="mt-1 h-1 rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.max(0, Math.min(100, ((netWorthByPlayer[p.player_id] ?? 0) / 7000) * 100))}%` }} /></div></div>
-            {p.is_bankrupt && <span className="text-[10px] text-rose-300">💀</span>}
-          </div>
-        ))}</div>
+<PlayerBar
+  players={players}
+  currentPlayerId={gameState.current_turn}
+  myId={myId}
+  balances={gameState.balances ?? {}}
+  netWorthByPlayer={netWorthByPlayer}
+/>
 
         <div className="relative">
           <GameBoard players={players} properties={properties} gameState={gameState} animatedPositions={animatedPositions} currentPlayer={currentPlayer} activePosition={activePosition} diceRolling={diceRolling || autoDiceRolling} diceAnimating={manualDiceAnimating || autoDiceAnimating} rolledValue={autoDiceRolling ? autoRolledValue : manualRolledValue} idleNotice={autoIdleNotice} hasDice={hasDice} onSelectProperty={setSelectedFieldId} gameEvent={boardGameEvent} chanceNotice={chanceNotice ? { playerName: players.find(p => p.player_id === chanceNotice.player_id)?.nickname ?? "Gracz", title: chanceNotice.title, description: chanceNotice.description, kind: chanceNotice.kind, newPositionName: chanceNotice.new_position != null ? fields[chanceNotice.new_position]?.name : undefined } : null} saleNotice={saleNotice ? { playerName: players.find(p => p.player_id === saleNotice.player_id)?.nickname ?? "Gracz", fieldName: fields[saleNotice.field_id]?.name ?? `Pole ${saleNotice.field_id}`, amount: saleNotice.amount, eventType: saleNotice.event_type } : null} />
